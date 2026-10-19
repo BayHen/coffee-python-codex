@@ -1,6 +1,6 @@
 # Smart Coffee Shop Management System
 
-Task 1 khởi tạo backend FastAPI; Task 2 thiết kế PostgreSQL schema và migration. Frontend React và API nghiệp vụ chưa được triển khai.
+Task 1 khởi tạo FastAPI; Task 2 thiết kế PostgreSQL; Task 3 bổ sung xác thực và phân quyền MVP. Frontend React và API nghiệp vụ chưa được triển khai.
 
 ## Yêu cầu
 
@@ -67,10 +67,23 @@ $env:TEST_DATABASE_URL = $env:DATABASE_URL
 
 Test PostgreSQL rollback dữ liệu sau mỗi bài test; thiếu `TEST_DATABASE_URL` thì các bài test này được skip. Xem [docs/database-design.md](docs/database-design.md) để biết ERD, khóa, chuẩn hóa và protocol transaction. `/health` vẫn chỉ kiểm tra tiến trình API, chưa truy vấn database.
 
+## Xác thực và phân quyền (Task 3)
+
+Sau `alembic upgrade head`, tạo JWT secret ngẫu nhiên trong environment và khởi tạo Admin đầu tiên qua terminal:
+
+```powershell
+$env:JWT_SECRET_KEY = (.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))")
+.\.venv\Scripts\python.exe -m app.auth.bootstrap_admin --email admin@example.com
+```
+
+Giữ secret này ổn định và an toàn; không commit vào repository. Xem [docs/authentication.md](docs/authentication.md) để biết API login, refresh, logout, quyền Admin/Manager/Staff, ví dụ Postman/Bruno và cách xử lý 401/403. Bài test auth dùng database `_test` đã migrate và tự tạo JWT secret thử nghiệm.
+
 ## Cấu trúc
 
 ```text
 backend/app/       FastAPI application
+backend/app/auth/  login, phiên và phân quyền
+backend/app/db/    SQLAlchemy models và session
 backend/tests/     Pytest tests
 backend/alembic/   Alembic migration
 frontend/          vị trí cho React ở task sau
@@ -82,7 +95,7 @@ Xem [docs/architecture.md](docs/architecture.md) để biết hướng phát tri
 
 ## Cấu hình cục bộ
 
-`.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` vào môi trường process trước khi dùng database hoặc Alembic. `.env` đã nằm trong `.gitignore`.
+`.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` và `JWT_SECRET_KEY` vào môi trường process trước khi dùng tính năng tương ứng. `.env` đã nằm trong `.gitignore`.
 
 ## Git và GitHub
 

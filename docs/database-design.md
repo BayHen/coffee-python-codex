@@ -9,6 +9,7 @@ Quán quản lý nhân viên, khách hàng, menu theo biến thể (ví dụ siz
 ```mermaid
 erDiagram
     ROLES ||--o{ USERS : grants
+    USERS ||--o{ AUTH_SESSIONS : owns
     USERS |o--o| EMPLOYEES : login_for
     CUSTOMERS |o--o{ ORDERS : places
     EMPLOYEES |o--o{ ORDERS : records
@@ -32,6 +33,13 @@ erDiagram
         varchar email UK
         varchar password_hash
         boolean is_active
+    }
+    AUTH_SESSIONS {
+        uuid id PK
+        bigint user_id FK
+        varchar refresh_token_hash UK
+        timestamptz expires_at
+        timestamptz revoked_at
     }
     EMPLOYEES {
         bigint id PK
@@ -121,7 +129,7 @@ erDiagram
 
 Danh mục, sản phẩm, biến thể, nguyên liệu và công thức nằm ở bảng riêng; quan hệ nhiều-nhiều giữa biến thể và nguyên liệu đi qua `Recipes`. Dữ liệu giá bán lịch sử và tổng đơn là ngoại lệ có chủ đích vì là giá đã chốt tại thời điểm giao dịch. Không lưu `current_stock`: tính `SUM(quantity_delta)` theo ingredient để tránh hai nguồn sự thật. Nếu dữ liệu lớn, có thể thêm bảng số dư/cache cập nhật trong cùng transaction và đối soát với ledger; chưa cần ở MVP.
 
-Email/điện thoại và SKU hiện unique theo giá trị lưu trong DB. Tầng nhập liệu sau này cần chuẩn hóa chữ hoa/thường và định dạng điện thoại trước khi ghi. Đơn giá dùng 2 chữ số thập phân; nếu kinh doanh bằng VND nguyên đồng, tầng nghiệp vụ quyết định quy tắc làm tròn. Trạng thái hiện dùng CHECK thay vì PostgreSQL ENUM để thay đổi dễ hơn qua migration.
+Email đăng nhập được unique theo `lower(users.email)` từ revision auth và được chuẩn hóa chữ thường khi tạo qua API/script. Email khách hàng, điện thoại và SKU vẫn unique theo giá trị lưu trong DB; tầng nhập liệu sau này cần chuẩn hóa chúng trước khi ghi. Đơn giá dùng 2 chữ số thập phân; nếu kinh doanh bằng VND nguyên đồng, tầng nghiệp vụ quyết định quy tắc làm tròn. Trạng thái hiện dùng CHECK thay vì PostgreSQL ENUM để thay đổi dễ hơn qua migration.
 
 ## Transaction và chống trùng lặp
 
@@ -132,3 +140,5 @@ Các protocol này được **thiết kế**, chưa triển khai thành nghiệp
 ## Migration và an toàn
 
 Revision đầu tiên là `d8398c7e85ca`. Alembic lấy URL từ biến môi trường `DATABASE_URL`, không lưu credential trong `alembic.ini`. Chỉ chạy `upgrade head` sau khi kiểm tra URL và backup nếu database có dữ liệu. Không chạy `downgrade` trên database có dữ liệu. Test PostgreSQL dùng `TEST_DATABASE_URL` với tên database kết thúc bằng `_test`, và mỗi test rollback dữ liệu của mình.
+
+Revision tiếp theo `b4c1a8e2f0d7` chỉ thêm `auth_sessions` để lưu hash refresh token, hạn dùng và thời điểm thu hồi. Không lưu token gốc. Xem [authentication.md](authentication.md) cho chính sách phiên.

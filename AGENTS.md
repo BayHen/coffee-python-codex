@@ -13,6 +13,7 @@
 - Keep route handlers and modules small and named for business concepts.
 - Run Ruff lint and format checks. Add dependencies to `pyproject.toml` only when used.
 - Keep money as `Decimal`/`NUMERIC`; use one `session.begin()` for a business write and stable idempotency keys for payments and stock events.
+- Keep auth in `backend/app/auth/`. Passwords use Argon2; signing keys come from environment; refresh token hashes and revocation state live in PostgreSQL.
 - Follow the existing layout before adding new directories or patterns.
 
 ## Testing
@@ -28,6 +29,7 @@
 - Use environment variables for secrets; `.env.example` contains placeholders only.
 - Validate external input and use parameterized database queries when database access is added.
 - Do not log secrets or sensitive personal data.
+- Check active sessions and current roles on protected requests. Return 401 for invalid credentials and 403 for authenticated users without permission.
 
 ## Codex workflow
 

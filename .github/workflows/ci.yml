@@ -15,7 +15,7 @@ jobs:
         image: postgres:18
         env:
           POSTGRES_USER: coffee_test
-          POSTGRES_PASSWORD: coffee_test
+          POSTGRES_PASSWORD: "${{ github.run_id }}-${{ github.run_attempt }}"
           POSTGRES_DB: coffee_shop_ci_test
         ports:
           - 5432:5432
@@ -25,8 +25,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql+psycopg://coffee_test:coffee_test@localhost:5432/coffee_shop_ci_test
-      TEST_DATABASE_URL: postgresql+psycopg://coffee_test:coffee_test@localhost:5432/coffee_shop_ci_test
+      DATABASE_URL: postgresql+psycopg://coffee_test:${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/coffee_shop_ci_test
+      TEST_DATABASE_URL: postgresql+psycopg://coffee_test:${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/coffee_shop_ci_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

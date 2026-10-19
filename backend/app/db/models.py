@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    Uuid,
     func,
     text,
 )
@@ -46,6 +48,10 @@ class User(Base):
     )
     role: Mapped[Role] = relationship(back_populates="users")
     employee: Mapped[Employee | None] = relationship(back_populates="user")
+    auth_sessions: Mapped[list[AuthSession]] = relationship(back_populates="user")
+
+
+Index("uq_users_email_lower", func.lower(User.email), unique=True)
 
 
 class Employee(Base):
@@ -257,3 +263,20 @@ class InventoryTransaction(Base):
     order_item: Mapped[OrderItem | None] = relationship(
         back_populates="inventory_transactions"
     )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        CheckConstraint("expires_at > created_at", name="auth_session_expiry_valid"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user: Mapped[User] = relationship(back_populates="auth_sessions")
