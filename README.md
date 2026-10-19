@@ -100,6 +100,20 @@ Sau khi chạy migration mới nhất, các endpoint `/categories`, `/products` 
 Staff có quyền đọc. Xem [docs/catalog-api.md](docs/catalog-api.md) để biết query
 filter, JSON mẫu, chính sách soft delete và cách kiểm thử.
 
+## Order Management (Task 5)
+
+Các endpoint `/orders` hỗ trợ tạo draft, snapshot giá/tên, discount, state machine,
+lịch sử sự kiện và thanh toán mô phỏng có idempotency. Xem
+[docs/order-management.md](docs/order-management.md) để biết state diagram, JSON mẫu,
+quy tắc transaction và kiểm thử concurrency.
+
+## Inventory Management (Task 6)
+
+Module inventory quản lý nguyên liệu, recipe, ledger nhập/xuất/điều chỉnh, cảnh báo
+tồn thấp và tự động tiêu thụ khi order được placed. Hủy order placed tạo các dòng hoàn
+kho tương ứng. Xem [docs/inventory-management.md](docs/inventory-management.md) để biết
+quy ước đơn vị, API và thứ tự locking.
+
 ## Cấu hình cục bộ
 
 `.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` và `JWT_SECRET_KEY` vào môi trường process trước khi dùng tính năng tương ứng. `.env` đã nằm trong `.gitignore`.

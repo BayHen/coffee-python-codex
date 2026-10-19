@@ -63,15 +63,28 @@ def create_order_item(connection: Connection) -> tuple[int, int, int]:
         .returning(ProductVariant.id)
     ).scalar_one()
     order_id = connection.execute(
-        insert(Order).values(total_amount=Decimal("9.00")).returning(Order.id)
+        insert(Order)
+        .values(
+            idempotency_key=f"order-{suffix}",
+            request_fingerprint=f"fingerprint-{suffix}",
+            subtotal_amount=Decimal("9.00"),
+            discount_percent=Decimal("0.00"),
+            discount_amount=Decimal("0.00"),
+            total_amount=Decimal("9.00"),
+        )
+        .returning(Order.id)
     ).scalar_one()
     item_id = connection.execute(
         insert(OrderItem)
         .values(
             order_id=order_id,
             variant_id=variant_id,
+            product_name="Latte",
+            variant_name="Medium",
+            sku=f"LATTE-{suffix}",
             quantity=2,
             unit_price=Decimal("4.50"),
+            line_total=Decimal("9.00"),
         )
         .returning(OrderItem.id)
     ).scalar_one()
@@ -97,8 +110,12 @@ def test_order_item_keeps_sale_price(connection: Connection) -> None:
                 insert(OrderItem).values(
                     order_id=order_id,
                     variant_id=variant_id,
+                    product_name="Latte",
+                    variant_name="Medium",
+                    sku=f"LATTE-{uuid4().hex[:12]}",
                     quantity=0,
                     unit_price=Decimal("4.50"),
+                    line_total=Decimal("0.00"),
                 )
             )
 
@@ -111,18 +128,32 @@ def test_payment_retries_cannot_double_charge(connection: Connection) -> None:
         "status": "succeeded",
         "amount": Decimal("9.00"),
     }
-    connection.execute(insert(Payment).values(**payment, idempotency_key="pay-one"))
+    connection.execute(
+        insert(Payment).values(
+            **payment,
+            idempotency_key="pay-one",
+            request_fingerprint="payment-one",
+        )
+    )
 
     with pytest.raises(IntegrityError):
         with connection.begin_nested():
             connection.execute(
-                insert(Payment).values(**payment, idempotency_key="pay-one")
+                insert(Payment).values(
+                    **payment,
+                    idempotency_key="pay-one",
+                    request_fingerprint="payment-one",
+                )
             )
 
     with pytest.raises(IntegrityError):
         with connection.begin_nested():
             connection.execute(
-                insert(Payment).values(**payment, idempotency_key="pay-two")
+                insert(Payment).values(
+                    **payment,
+                    idempotency_key="pay-two",
+                    request_fingerprint="payment-two",
+                )
             )
 
 
@@ -138,10 +169,14 @@ def test_stock_sale_event_cannot_be_recorded_twice(connection: Connection) -> No
         "order_item_id": item_id,
         "transaction_type": "sale",
         "quantity_delta": Decimal("-250.000"),
+        "request_fingerprint": "stock-sale",
+        "reason": "Test order consumption",
     }
-    connection.execute(
-        insert(InventoryTransaction).values(**sale, idempotency_key="stock-one")
-    )
+    sale_id = connection.execute(
+        insert(InventoryTransaction)
+        .values(**sale, idempotency_key="stock-one")
+        .returning(InventoryTransaction.id)
+    ).scalar_one()
 
     with pytest.raises(IntegrityError):
         with connection.begin_nested():
@@ -161,7 +196,34 @@ def test_stock_sale_event_cannot_be_recorded_twice(connection: Connection) -> No
                 insert(InventoryTransaction).values(
                     ingredient_id=ingredient_id,
                     idempotency_key="bad-purchase",
+                    request_fingerprint="bad-purchase",
                     transaction_type="purchase",
                     quantity_delta=Decimal("-1.000"),
+                    reason="Invalid test purchase",
+                )
+            )
+
+    stock_return = {
+        "ingredient_id": ingredient_id,
+        "order_item_id": item_id,
+        "reversal_of_id": sale_id,
+        "transaction_type": "return",
+        "quantity_delta": Decimal("250.000"),
+        "reason": "Test order cancellation",
+    }
+    connection.execute(
+        insert(InventoryTransaction).values(
+            **stock_return,
+            idempotency_key="return-one",
+            request_fingerprint="return-one",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        with connection.begin_nested():
+            connection.execute(
+                insert(InventoryTransaction).values(
+                    **stock_return,
+                    idempotency_key="return-two",
+                    request_fingerprint="return-two",
                 )
             )

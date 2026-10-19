@@ -1,4 +1,4 @@
-"""Task 2 relational schema; business operations are added in later tasks."""
+"""SQLAlchemy models for the Smart Coffee Shop modular monolith."""
 
 from __future__ import annotations
 
@@ -49,6 +49,10 @@ class User(Base):
     role: Mapped[Role] = relationship(back_populates="users")
     employee: Mapped[Employee | None] = relationship(back_populates="user")
     auth_sessions: Mapped[list[AuthSession]] = relationship(back_populates="user")
+    order_events: Mapped[list[OrderEvent]] = relationship(back_populates="actor")
+    inventory_transactions: Mapped[list[InventoryTransaction]] = relationship(
+        back_populates="actor"
+    )
 
 
 Index("uq_users_email_lower", func.lower(User.email), unique=True)
@@ -139,9 +143,20 @@ Index(
 class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
+        CheckConstraint("subtotal_amount >= 0", name="subtotal_nonnegative"),
+        CheckConstraint(
+            "discount_percent >= 0 AND discount_percent <= 20",
+            name="discount_percent_valid",
+        ),
+        CheckConstraint("discount_amount >= 0", name="discount_nonnegative"),
         CheckConstraint("total_amount >= 0", name="total_nonnegative"),
         CheckConstraint(
-            "status IN ('draft', 'placed', 'cancelled')", name="status_valid"
+            "subtotal_amount - discount_amount = total_amount",
+            name="total_components_valid",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'placed', 'paid', 'cancelled')",
+            name="status_valid",
         ),
     )
 
@@ -152,15 +167,31 @@ class Order(Base):
     employee_id: Mapped[int | None] = mapped_column(
         ForeignKey("employees.id"), index=True
     )
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), server_default=text("'draft'"))
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), server_default=text("0")
+    )
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), server_default=text("0")
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     customer: Mapped[Customer | None] = relationship(back_populates="orders")
     employee: Mapped[Employee | None] = relationship(back_populates="orders")
-    items: Mapped[list[OrderItem]] = relationship(back_populates="order")
-    payments: Mapped[list[Payment]] = relationship(back_populates="order")
+    items: Mapped[list[OrderItem]] = relationship(
+        back_populates="order", order_by="OrderItem.id"
+    )
+    payments: Mapped[list[Payment]] = relationship(
+        back_populates="order", order_by="Payment.id"
+    )
+    events: Mapped[list[OrderEvent]] = relationship(
+        back_populates="order", order_by="OrderEvent.id"
+    )
 
 
 class OrderItem(Base):
@@ -168,6 +199,8 @@ class OrderItem(Base):
     __table_args__ = (
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("unit_price >= 0", name="unit_price_nonnegative"),
+        CheckConstraint("line_total >= 0", name="line_total_nonnegative"),
+        CheckConstraint("unit_price * quantity = line_total", name="line_total_valid"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -175,13 +208,45 @@ class OrderItem(Base):
     variant_id: Mapped[int] = mapped_column(
         ForeignKey("product_variants.id"), index=True
     )
+    product_name: Mapped[str] = mapped_column(String(150))
+    variant_name: Mapped[str] = mapped_column(String(100))
+    sku: Mapped[str] = mapped_column(String(64))
     quantity: Mapped[int] = mapped_column(Integer)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    line_total: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     order: Mapped[Order] = relationship(back_populates="items")
     variant: Mapped[ProductVariant] = relationship(back_populates="order_items")
     inventory_transactions: Mapped[list[InventoryTransaction]] = relationship(
         back_populates="order_item"
     )
+
+
+class OrderEvent(Base):
+    __tablename__ = "order_events"
+    __table_args__ = (
+        CheckConstraint(
+            "to_status IN ('draft', 'placed', 'paid', 'cancelled')",
+            name="to_status_valid",
+        ),
+        CheckConstraint(
+            "from_status IS NULL OR "
+            "from_status IN ('draft', 'placed', 'paid', 'cancelled')",
+            name="from_status_valid",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(32))
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    order: Mapped[Order] = relationship(back_populates="events")
+    actor: Mapped[User] = relationship(back_populates="order_events")
 
 
 class Payment(Base):
@@ -203,6 +268,7 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
     provider_reference: Mapped[str | None] = mapped_column(String(128), unique=True)
     method: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(20), server_default=text("'pending'"))
@@ -215,15 +281,29 @@ class Payment(Base):
 
 class Ingredient(Base):
     __tablename__ = "ingredients"
+    __table_args__ = (
+        CheckConstraint("unit IN ('g', 'ml', 'piece')", name="unit_valid"),
+        CheckConstraint(
+            "low_stock_threshold >= 0", name="low_stock_threshold_nonnegative"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     sku: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str] = mapped_column(String(150))
     unit: Mapped[str] = mapped_column(String(20))
+    low_stock_threshold: Mapped[Decimal] = mapped_column(
+        Numeric(14, 3), server_default=text("0")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     recipes: Mapped[list[Recipe]] = relationship(back_populates="ingredient")
     transactions: Mapped[list[InventoryTransaction]] = relationship(
         back_populates="ingredient"
     )
+
+
+Index("uq_ingredients_sku_lower", func.lower(Ingredient.sku), unique=True)
+Index("uq_ingredients_name_lower", func.lower(Ingredient.name), unique=True)
 
 
 class Recipe(Base):
@@ -247,18 +327,19 @@ class InventoryTransaction(Base):
         CheckConstraint("quantity_delta <> 0", name="delta_nonzero"),
         CheckConstraint(
             "(transaction_type IN ('sale', 'waste') AND quantity_delta < 0) "
-            "OR (transaction_type = 'purchase' AND quantity_delta > 0) "
+            "OR (transaction_type IN ('purchase', 'return') AND quantity_delta > 0) "
             "OR transaction_type = 'adjustment'",
             name="delta_direction_valid",
         ),
         CheckConstraint(
-            "transaction_type IN ('purchase', 'sale', 'adjustment', 'waste')",
+            "transaction_type IN ('purchase', 'sale', 'return', 'adjustment', 'waste')",
             name="type_valid",
         ),
         CheckConstraint(
-            "transaction_type <> 'sale' OR order_item_id IS NOT NULL",
-            name="sale_has_order_item",
+            "transaction_type NOT IN ('sale', 'return') OR order_item_id IS NOT NULL",
+            name="order_movement_has_order_item",
         ),
+        CheckConstraint("char_length(btrim(reason)) >= 3", name="reason_valid"),
         Index(
             "uq_inventory_sale_item_ingredient",
             "order_item_id",
@@ -273,9 +354,17 @@ class InventoryTransaction(Base):
     order_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("order_items.id"), index=True
     )
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    reversal_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory_transactions.id"), unique=True
+    )
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
     transaction_type: Mapped[str] = mapped_column(String(20))
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    reason: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -283,6 +372,7 @@ class InventoryTransaction(Base):
     order_item: Mapped[OrderItem | None] = relationship(
         back_populates="inventory_transactions"
     )
+    actor: Mapped[User | None] = relationship(back_populates="inventory_transactions")
 
 
 class AuthSession(Base):
