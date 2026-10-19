@@ -93,6 +93,13 @@ docs/              tài liệu kiến trúc
 
 Xem [docs/architecture.md](docs/architecture.md) để biết hướng phát triển modular monolith và [AGENTS.md](AGENTS.md) để biết quy tắc làm việc với Codex.
 
+## Product & Category Management (Task 4)
+
+Sau khi chạy migration mới nhất, các endpoint `/categories`, `/products` và
+`/products/{id}/variants` xuất hiện trong `/docs`. Admin và Manager có quyền ghi;
+Staff có quyền đọc. Xem [docs/catalog-api.md](docs/catalog-api.md) để biết query
+filter, JSON mẫu, chính sách soft delete và cách kiểm thử.
+
 ## Cấu hình cục bộ
 
 `.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` và `JWT_SECRET_KEY` vào môi trường process trước khi dùng tính năng tương ứng. `.env` đã nằm trong `.gitignore`.

@@ -87,6 +87,9 @@ class Category(Base):
     products: Mapped[list[Product]] = relationship(back_populates="category")
 
 
+Index("uq_categories_name_lower", func.lower(Category.name), unique=True)
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -96,6 +99,14 @@ class Product(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     category: Mapped[Category] = relationship(back_populates="products")
     variants: Mapped[list[ProductVariant]] = relationship(back_populates="product")
+
+
+Index(
+    "uq_products_category_name_lower",
+    Product.category_id,
+    func.lower(Product.name),
+    unique=True,
+)
 
 
 class ProductVariant(Base):
@@ -114,6 +125,15 @@ class ProductVariant(Base):
     product: Mapped[Product] = relationship(back_populates="variants")
     recipes: Mapped[list[Recipe]] = relationship(back_populates="variant")
     order_items: Mapped[list[OrderItem]] = relationship(back_populates="variant")
+
+
+Index("uq_product_variants_sku_lower", func.lower(ProductVariant.sku), unique=True)
+Index(
+    "uq_product_variants_product_name_lower",
+    ProductVariant.product_id,
+    func.lower(ProductVariant.name),
+    unique=True,
+)
 
 
 class Order(Base):
