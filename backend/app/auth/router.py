@@ -67,6 +67,8 @@ def login(
             )
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account is inactive")
+        if user.employee is not None and not user.employee.is_active:
+            raise HTTPException(status_code=403, detail="Employee is inactive")
 
         session_id = uuid4()
         raw_refresh, hashed_refresh = create_refresh_token(session_id)
@@ -113,6 +115,8 @@ def refresh(
             raise unauthorized("Invalid or expired refresh token")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account is inactive")
+        if user.employee is not None and not user.employee.is_active:
+            raise HTTPException(status_code=403, detail="Employee is inactive")
 
         raw_refresh, auth_session.refresh_token_hash = create_refresh_token(session_id)
         access = create_access_token(user.id, session_id)

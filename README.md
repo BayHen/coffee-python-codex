@@ -114,6 +114,13 @@ tồn thấp và tự động tiêu thụ khi order được placed. Hủy order
 kho tương ứng. Xem [docs/inventory-management.md](docs/inventory-management.md) để biết
 quy ước đơn vị, API và thứ tự locking.
 
+## Customer & Employee Management (Task 7)
+
+Module `people` cung cấp Customer/Employee CRUD, lịch sử mua hàng và loyalty ledger có
+idempotency. Vô hiệu hóa giữ nguyên lịch sử; nhân viên liên kết với User bị vô hiệu hóa sẽ
+bị thu hồi phiên đăng nhập. Xem [docs/people-management.md](docs/people-management.md)
+để biết quan hệ dữ liệu, ma trận quyền, API và hướng dẫn Postman/Bruno.
+
 ## Cấu hình cục bộ
 
 `.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` và `JWT_SECRET_KEY` vào môi trường process trước khi dùng tính năng tương ứng. `.env` đã nằm trong `.gitignore`.

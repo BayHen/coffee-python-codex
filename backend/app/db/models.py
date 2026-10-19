@@ -53,6 +53,9 @@ class User(Base):
     inventory_transactions: Mapped[list[InventoryTransaction]] = relationship(
         back_populates="actor"
     )
+    loyalty_transactions: Mapped[list[LoyaltyTransaction]] = relationship(
+        back_populates="actor"
+    )
 
 
 Index("uq_users_email_lower", func.lower(User.email), unique=True)
@@ -70,6 +73,9 @@ class Employee(Base):
     orders: Mapped[list[Order]] = relationship(back_populates="employee")
 
 
+Index("uq_employees_code_lower", func.lower(Employee.employee_code), unique=True)
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
@@ -77,10 +83,17 @@ class Customer(Base):
     full_name: Mapped[str] = mapped_column(String(150))
     phone: Mapped[str | None] = mapped_column(String(32), unique=True)
     email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     orders: Mapped[list[Order]] = relationship(back_populates="customer")
+    loyalty_transactions: Mapped[list[LoyaltyTransaction]] = relationship(
+        back_populates="customer"
+    )
+
+
+Index("uq_customers_email_lower", func.lower(Customer.email), unique=True)
 
 
 class Category(Base):
@@ -192,6 +205,9 @@ class Order(Base):
     events: Mapped[list[OrderEvent]] = relationship(
         back_populates="order", order_by="OrderEvent.id"
     )
+    loyalty_transactions: Mapped[list[LoyaltyTransaction]] = relationship(
+        back_populates="order", order_by="LoyaltyTransaction.id"
+    )
 
 
 class OrderItem(Base):
@@ -277,6 +293,58 @@ class Payment(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     order: Mapped[Order] = relationship(back_populates="payments")
+
+
+class LoyaltyTransaction(Base):
+    __tablename__ = "loyalty_transactions"
+    __table_args__ = (
+        CheckConstraint("points_delta <> 0", name="points_delta_nonzero"),
+        CheckConstraint(
+            "transaction_type IN ('earn', 'refund', 'adjustment')",
+            name="type_valid",
+        ),
+        CheckConstraint(
+            "(transaction_type = 'earn' AND points_delta > 0) "
+            "OR (transaction_type = 'refund' AND points_delta < 0) "
+            "OR transaction_type = 'adjustment'",
+            name="points_direction_valid",
+        ),
+        CheckConstraint(
+            "transaction_type = 'adjustment' OR order_id IS NOT NULL",
+            name="order_required",
+        ),
+        CheckConstraint("char_length(btrim(reason)) >= 3", name="reason_valid"),
+        Index(
+            "uq_loyalty_earn_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("transaction_type = 'earn'"),
+        ),
+        Index(
+            "uq_loyalty_refund_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("transaction_type = 'refund'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    transaction_type: Mapped[str] = mapped_column(String(20))
+    points_delta: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    customer: Mapped[Customer] = relationship(back_populates="loyalty_transactions")
+    order: Mapped[Order | None] = relationship(back_populates="loyalty_transactions")
+    actor: Mapped[User | None] = relationship(back_populates="loyalty_transactions")
 
 
 class Ingredient(Base):

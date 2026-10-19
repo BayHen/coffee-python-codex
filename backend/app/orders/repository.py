@@ -75,7 +75,11 @@ class OrderRepository:
 
     def customer_exists(self, customer_id: int) -> bool:
         return bool(
-            self.db.scalar(select(Customer.id).where(Customer.id == customer_id))
+            self.db.scalar(
+                select(Customer.id).where(
+                    Customer.id == customer_id, Customer.is_active.is_(True)
+                )
+            )
         )
 
     def employee_id_for_user(self, user_id: int) -> int | None:

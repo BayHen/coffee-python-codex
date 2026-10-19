@@ -20,6 +20,7 @@ from app.orders.schemas import (
     OrderUpdate,
     SimulatedPaymentCreate,
 )
+from app.people.service import PeopleService
 
 CENT = Decimal("0.01")
 ALLOWED_TRANSITIONS = {
@@ -300,6 +301,7 @@ class OrderService:
                 self.db.add(payment)
                 if payload.outcome == "succeeded":
                     order.status = "paid"
+                    PeopleService(self.db).award_for_paid_order(order, actor_user_id)
                     event_type = "payment_succeeded"
                     to_status = "paid"
                 else:

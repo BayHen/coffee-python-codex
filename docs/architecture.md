@@ -12,5 +12,9 @@ thiết của nó. Chỉ trích xuất phần dùng chung khi có ít nhất hai
 và [order-management.md](order-management.md),
 [inventory-management.md](inventory-management.md) cho các quyết định chi tiết.
 
+Module `backend/app/people/` quản lý Customer, Employee và loyalty ledger. Module orders
+gọi quy tắc cộng điểm cụ thể sau khi thanh toán thành công; dữ liệu vẫn nằm trong cùng
+transaction PostgreSQL.
+
 Không tạo sẵn `BaseRepository`, service interface, dependency container hay các lớp trừu tượng khác trước khi có nhu cầu cụ thể. Route `/health` chỉ cho biết tiến trình API đáp ứng; nó chưa kiểm tra kết nối database.
 

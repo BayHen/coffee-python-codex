@@ -11,8 +11,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     Category,
+    Customer,
     Ingredient,
     InventoryTransaction,
+    LoyaltyTransaction,
     Order,
     OrderItem,
     Payment,
@@ -153,6 +155,68 @@ def test_payment_retries_cannot_double_charge(connection: Connection) -> None:
                     **payment,
                     idempotency_key="pay-two",
                     request_fingerprint="payment-two",
+                )
+            )
+
+
+def test_loyalty_points_cannot_be_earned_or_refunded_twice(
+    connection: Connection,
+) -> None:
+    order_id, _, _ = create_order_item(connection)
+    suffix = uuid4().hex[:12]
+    customer_id = connection.execute(
+        insert(Customer)
+        .values(full_name="Loyal Customer", email=f"loyal-{suffix}@example.com")
+        .returning(Customer.id)
+    ).scalar_one()
+    connection.execute(
+        Order.__table__.update()
+        .where(Order.id == order_id)
+        .values(customer_id=customer_id, status="paid")
+    )
+    earn = {
+        "customer_id": customer_id,
+        "order_id": order_id,
+        "transaction_type": "earn",
+        "points_delta": 1,
+        "reason": "Paid order reward",
+    }
+    connection.execute(
+        insert(LoyaltyTransaction).values(
+            **earn,
+            idempotency_key=f"earn-one-{suffix}",
+            request_fingerprint=f"earn-one-{suffix}",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        with connection.begin_nested():
+            connection.execute(
+                insert(LoyaltyTransaction).values(
+                    **earn,
+                    idempotency_key=f"earn-two-{suffix}",
+                    request_fingerprint=f"earn-two-{suffix}",
+                )
+            )
+
+    refund = earn | {
+        "transaction_type": "refund",
+        "points_delta": -1,
+        "reason": "Refunded order reward",
+    }
+    connection.execute(
+        insert(LoyaltyTransaction).values(
+            **refund,
+            idempotency_key=f"refund-one-{suffix}",
+            request_fingerprint=f"refund-one-{suffix}",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        with connection.begin_nested():
+            connection.execute(
+                insert(LoyaltyTransaction).values(
+                    **refund,
+                    idempotency_key=f"refund-two-{suffix}",
+                    request_fingerprint=f"refund-two-{suffix}",
                 )
             )
 

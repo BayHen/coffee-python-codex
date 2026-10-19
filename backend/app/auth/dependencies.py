@@ -71,6 +71,8 @@ def current_principal(
             raise unauthorized()
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account is inactive")
+        if user.employee is not None and not user.employee.is_active:
+            raise HTTPException(status_code=403, detail="Employee is inactive")
         return Principal(
             user_id=user.id,
             session_id=session_id,
