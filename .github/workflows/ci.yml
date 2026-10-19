@@ -10,6 +10,23 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: coffee_test
+          POSTGRES_PASSWORD: coffee_test
+          POSTGRES_DB: coffee_shop_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U coffee_test -d coffee_shop_ci_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://coffee_test:coffee_test@localhost:5432/coffee_shop_ci_test
+      TEST_DATABASE_URL: postgresql+psycopg://coffee_test:coffee_test@localhost:5432/coffee_shop_ci_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,6 +34,8 @@ jobs:
           python-version: "3.14"
       - name: Install dependencies
         run: python -m pip install -e ".[dev]"
+      - name: Migrate test database
+        run: python -m alembic upgrade head
       - name: Lint
         run: python -m ruff check .
       - name: Format

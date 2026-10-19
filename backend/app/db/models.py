@@ -1,0 +1,259 @@
+"""Task 2 relational schema; business operations are added in later tasks."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    users: Mapped[list[User]] = relationship(back_populates="role")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    role: Mapped[Role] = relationship(back_populates="users")
+    employee: Mapped[Employee | None] = relationship(back_populates="user")
+
+
+class Employee(Base):
+    __tablename__ = "employees"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), unique=True)
+    employee_code: Mapped[str] = mapped_column(String(32), unique=True)
+    full_name: Mapped[str] = mapped_column(String(150))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    user: Mapped[User | None] = relationship(back_populates="employee")
+    orders: Mapped[list[Order]] = relationship(back_populates="employee")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(150))
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True)
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    orders: Mapped[list[Order]] = relationship(back_populates="customer")
+
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    products: Mapped[list[Product]] = relationship(back_populates="category")
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    category: Mapped[Category] = relationship(back_populates="products")
+    variants: Mapped[list[ProductVariant]] = relationship(back_populates="product")
+
+
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+    __table_args__ = (
+        UniqueConstraint("product_id", "name"),
+        CheckConstraint("price >= 0", name="price_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    sku: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    product: Mapped[Product] = relationship(back_populates="variants")
+    recipes: Mapped[list[Recipe]] = relationship(back_populates="variant")
+    order_items: Mapped[list[OrderItem]] = relationship(back_populates="variant")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint("total_amount >= 0", name="total_nonnegative"),
+        CheckConstraint(
+            "status IN ('draft', 'placed', 'cancelled')", name="status_valid"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id"), index=True
+    )
+    employee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("employees.id"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), server_default=text("'draft'"))
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    customer: Mapped[Customer | None] = relationship(back_populates="orders")
+    employee: Mapped[Employee | None] = relationship(back_populates="orders")
+    items: Mapped[list[OrderItem]] = relationship(back_populates="order")
+    payments: Mapped[list[Payment]] = relationship(back_populates="order")
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("unit_price >= 0", name="unit_price_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    variant_id: Mapped[int] = mapped_column(
+        ForeignKey("product_variants.id"), index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    order: Mapped[Order] = relationship(back_populates="items")
+    variant: Mapped[ProductVariant] = relationship(back_populates="order_items")
+    inventory_transactions: Mapped[list[InventoryTransaction]] = relationship(
+        back_populates="order_item"
+    )
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="amount_positive"),
+        CheckConstraint(
+            "status IN ('pending', 'succeeded', 'failed', 'refunded')",
+            name="status_valid",
+        ),
+        Index(
+            "uq_payments_succeeded_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("status = 'succeeded'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    provider_reference: Mapped[str | None] = mapped_column(String(128), unique=True)
+    method: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(20), server_default=text("'pending'"))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    order: Mapped[Order] = relationship(back_populates="payments")
+
+
+class Ingredient(Base):
+    __tablename__ = "ingredients"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(150))
+    unit: Mapped[str] = mapped_column(String(20))
+    recipes: Mapped[list[Recipe]] = relationship(back_populates="ingredient")
+    transactions: Mapped[list[InventoryTransaction]] = relationship(
+        back_populates="ingredient"
+    )
+
+
+class Recipe(Base):
+    __tablename__ = "recipes"
+    __table_args__ = (
+        UniqueConstraint("variant_id", "ingredient_id"),
+        CheckConstraint("quantity_required > 0", name="quantity_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    variant_id: Mapped[int] = mapped_column(ForeignKey("product_variants.id"))
+    ingredient_id: Mapped[int] = mapped_column(ForeignKey("ingredients.id"), index=True)
+    quantity_required: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    variant: Mapped[ProductVariant] = relationship(back_populates="recipes")
+    ingredient: Mapped[Ingredient] = relationship(back_populates="recipes")
+
+
+class InventoryTransaction(Base):
+    __tablename__ = "inventory_transactions"
+    __table_args__ = (
+        CheckConstraint("quantity_delta <> 0", name="delta_nonzero"),
+        CheckConstraint(
+            "(transaction_type IN ('sale', 'waste') AND quantity_delta < 0) "
+            "OR (transaction_type = 'purchase' AND quantity_delta > 0) "
+            "OR transaction_type = 'adjustment'",
+            name="delta_direction_valid",
+        ),
+        CheckConstraint(
+            "transaction_type IN ('purchase', 'sale', 'adjustment', 'waste')",
+            name="type_valid",
+        ),
+        CheckConstraint(
+            "transaction_type <> 'sale' OR order_item_id IS NOT NULL",
+            name="sale_has_order_item",
+        ),
+        Index(
+            "uq_inventory_sale_item_ingredient",
+            "order_item_id",
+            "ingredient_id",
+            unique=True,
+            postgresql_where=text("transaction_type = 'sale'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ingredient_id: Mapped[int] = mapped_column(ForeignKey("ingredients.id"), index=True)
+    order_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("order_items.id"), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    transaction_type: Mapped[str] = mapped_column(String(20))
+    quantity_delta: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ingredient: Mapped[Ingredient] = relationship(back_populates="transactions")
+    order_item: Mapped[OrderItem | None] = relationship(
+        back_populates="inventory_transactions"
+    )

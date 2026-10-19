@@ -1,11 +1,12 @@
 # Smart Coffee Shop Management System
 
-Task 1 khởi tạo backend FastAPI và cấu trúc repository. Frontend React và PostgreSQL chưa được triển khai.
+Task 1 khởi tạo backend FastAPI; Task 2 thiết kế PostgreSQL schema và migration. Frontend React và API nghiệp vụ chưa được triển khai.
 
 ## Yêu cầu
 
 - Python 3.11+ (đã thử trên Python 3.14.3)
 - Git
+- PostgreSQL 18 (hoặc phiên bản tương thích để chạy migration)
 - PowerShell trên Windows cho các lệnh bên dưới
 
 ## Cài đặt trên Windows
@@ -35,11 +36,43 @@ Mở `http://127.0.0.1:8000/health` để xem `{"status":"ok"}` và `http://127.
 .\.venv\Scripts\python.exe -m pytest
 ```
 
+## PostgreSQL và migration (Task 2)
+
+Tạo **database development riêng** nếu chưa có, ví dụ:
+
+```powershell
+createdb -h localhost -U postgres coffee_shop_dev
+```
+
+Đặt URL trong phiên PowerShell hiện tại; thay `USER`, `PASSWORD` bằng tài khoản của bạn. Nếu mật khẩu có ký tự đặc biệt, URL-encode phần mật khẩu. Không ghi URL thật vào Git.
+
+```powershell
+$env:DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coffee_shop_dev'
+.\.venv\Scripts\python.exe -m alembic current
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic current
+```
+
+Trước `upgrade head` trên database có dữ liệu, kiểm tra `DATABASE_URL`, backup và đọc file revision trong `backend/alembic/versions/`. Migration đầu tiên chỉ tạo bảng, index và constraint; không xóa bảng hiện có. Không chạy `downgrade` trên database có dữ liệu.
+
+Để chạy test ràng buộc PostgreSQL, tạo thêm database **riêng** có tên kết thúc `_test` và chạy migration ở database đó:
+
+```powershell
+createdb -h localhost -U postgres coffee_shop_dev_test
+$env:DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coffee_shop_dev_test'
+.\.venv\Scripts\python.exe -m alembic upgrade head
+$env:TEST_DATABASE_URL = $env:DATABASE_URL
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Test PostgreSQL rollback dữ liệu sau mỗi bài test; thiếu `TEST_DATABASE_URL` thì các bài test này được skip. Xem [docs/database-design.md](docs/database-design.md) để biết ERD, khóa, chuẩn hóa và protocol transaction. `/health` vẫn chỉ kiểm tra tiến trình API, chưa truy vấn database.
+
 ## Cấu trúc
 
 ```text
 backend/app/       FastAPI application
 backend/tests/     Pytest tests
+backend/alembic/   Alembic migration
 frontend/          vị trí cho React ở task sau
 docs/              tài liệu kiến trúc
 .github/workflows/ CI cho backend
@@ -49,7 +82,7 @@ Xem [docs/architecture.md](docs/architecture.md) để biết hướng phát tri
 
 ## Cấu hình cục bộ
 
-`.env.example` là mẫu cho các task sau. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng hiện chưa đọc các biến này; `.env` đã nằm trong `.gitignore`.
+`.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` vào môi trường process trước khi dùng database hoặc Alembic. `.env` đã nằm trong `.gitignore`.
 
 ## Git và GitHub
 
@@ -58,7 +91,7 @@ Repository đã có Git và remote `origin`. Kiểm tra địa chỉ trước kh
 ```powershell
 git status
 git remote -v
-git add README.md AGENTS.md .gitignore .env.example pyproject.toml backend frontend docs .github
+git add README.md AGENTS.md .gitignore .env.example pyproject.toml alembic.ini backend frontend docs .github
 git commit -m "Initialize Smart Coffee Shop project"
 ```
 

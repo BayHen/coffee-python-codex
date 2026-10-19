@@ -4,7 +4,7 @@
 
 - Keep one FastAPI backend in `backend/app/`; build features as modules inside it when needed.
 - Keep React in `frontend/` and project decisions in `docs/`.
-- PostgreSQL integration belongs to a later task. Do not add unused layers or abstractions.
+- PostgreSQL schema and Alembic live in `backend/app/db/` and `backend/alembic/`. Do not add unused layers or abstractions.
 - `/health` currently checks only that the API process responds.
 
 ## Code
@@ -12,6 +12,7 @@
 - Target Python 3.11+ and use type hints for new functions.
 - Keep route handlers and modules small and named for business concepts.
 - Run Ruff lint and format checks. Add dependencies to `pyproject.toml` only when used.
+- Keep money as `Decimal`/`NUMERIC`; use one `session.begin()` for a business write and stable idempotency keys for payments and stock events.
 - Follow the existing layout before adding new directories or patterns.
 
 ## Testing
@@ -23,6 +24,7 @@
 ## Security
 
 - Never commit `.env`, credentials, tokens, or real customer data.
+- Review generated Alembic revisions; never run destructive migrations against an existing database automatically.
 - Use environment variables for secrets; `.env.example` contains placeholders only.
 - Validate external input and use parameterized database queries when database access is added.
 - Do not log secrets or sensitive personal data.
