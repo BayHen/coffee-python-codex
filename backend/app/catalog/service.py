@@ -68,7 +68,10 @@ class CatalogService:
                 if category is None:
                     raise api_error(404, "category_not_found", "Category not found")
                 if "name" in payload.model_fields_set:
-                    assert payload.name is not None
+                    if payload.name is None:
+                        raise api_error(
+                            422, "category_name_required", "Category name is required"
+                        )
                     category.name = payload.name
                 self.db.flush()
         except IntegrityError as exc:

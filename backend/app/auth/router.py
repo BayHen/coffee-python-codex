@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.auth.dependencies import (
     require_roles,
     unauthorized,
 )
+from app.auth.rate_limit import login_rate_limiter
 from app.auth.schemas import (
     CreateUserRequest,
     LoginRequest,
@@ -43,10 +44,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", response_model=TokenPair)
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     db: Annotated[Session, Depends(get_session)],
 ) -> TokenPair:
     response.headers["Cache-Control"] = "no-store"
+    client_host = request.client.host if request.client else "unknown"
+    limiter_key = login_rate_limiter.key(client_host, str(payload.email))
+    login_rate_limiter.check(limiter_key)
     with db.begin():
         user = db.scalar(
             select(User).where(func.lower(User.email) == str(payload.email))
@@ -54,12 +59,14 @@ def login(
         password = payload.password.get_secret_value()
         if user is None:
             verify_password(password, dummy_password_hash())
+            login_rate_limiter.record_failure(limiter_key)
             raise HTTPException(
                 status_code=401,
                 detail="Invalid email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         if not verify_password(password, user.password_hash):
+            login_rate_limiter.record_failure(limiter_key)
             raise HTTPException(
                 status_code=401,
                 detail="Invalid email or password",
@@ -81,6 +88,8 @@ def login(
             )
         )
         access = create_access_token(user.id, session_id)
+
+    login_rate_limiter.clear(limiter_key)
 
     return TokenPair(
         access_token=access,

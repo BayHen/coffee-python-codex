@@ -186,6 +186,14 @@ def test_catalog_validation_conflicts_and_rbac(catalog_setup: dict[str, Any]) ->
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"]["code"] == "category_name_exists"
 
+    injection = client.get(
+        "/categories",
+        headers=staff,
+        params={"search": "' OR 1=1 --"},
+    )
+    assert injection.status_code == 200
+    assert injection.json()["total"] == 0
+
     assert client.get("/categories", headers=staff).status_code == 200
     assert (
         client.post("/categories", headers=staff, json={"name": "Juice"}).status_code

@@ -26,7 +26,7 @@ def test_concurrent_outflows_cannot_overdraw_stock() -> None:
     if not (make_url(url).database or "").endswith("_test"):
         pytest.fail("TEST_DATABASE_URL database name must end with _test")
 
-    suffix = uuid4().hex
+    suffix = uuid4().hex[:20]
     engine = create_db_engine(url)
     ids: dict[str, int] = {}
     try:

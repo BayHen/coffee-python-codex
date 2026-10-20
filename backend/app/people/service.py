@@ -405,7 +405,12 @@ class PeopleService:
                         "A paid customer order is required",
                     )
                 customer = self.repository.get_customer(order.customer_id, lock=True)
-                assert customer is not None
+                if customer is None:
+                    raise api_error(
+                        409,
+                        "order_customer_missing",
+                        "Order customer is no longer available",
+                    )
                 earn = self.repository.loyalty_for_order(order.id, "earn")
                 if earn is None:
                     raise api_error(

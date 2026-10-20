@@ -2,10 +2,14 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 
 
-class LoginRequest(BaseModel):
+class StrictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoginRequest(StrictRequest):
     email: EmailStr
     password: SecretStr = Field(min_length=1, max_length=1024)
 
@@ -15,7 +19,7 @@ class LoginRequest(BaseModel):
         return str(value).strip().lower()
 
 
-class CreateUserRequest(BaseModel):
+class CreateUserRequest(StrictRequest):
     email: EmailStr
     password: SecretStr = Field(min_length=12, max_length=1024)
     role: Literal["Admin", "Manager", "Staff"]
@@ -26,11 +30,11 @@ class CreateUserRequest(BaseModel):
         return str(value).strip().lower()
 
 
-class UserStatusUpdate(BaseModel):
+class UserStatusUpdate(StrictRequest):
     is_active: bool
 
 
-class RefreshRequest(BaseModel):
+class RefreshRequest(StrictRequest):
     refresh_token: str = Field(min_length=1, max_length=200)
 
 

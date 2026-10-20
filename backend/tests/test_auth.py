@@ -223,6 +223,17 @@ def test_bad_credentials_tokens_and_disabled_account(
     assert (
         client.post(
             "/auth/login",
+            json={
+                "email": "staff@example.com",
+                "password": password,
+                "is_admin": True,
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/auth/login",
             json={"email": "missing@example.com", "password": password},
         ).status_code
         == 401

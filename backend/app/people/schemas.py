@@ -106,6 +106,8 @@ class CustomerPage(BaseModel):
 
 
 class CustomerOrderView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     status: Literal["draft", "placed", "paid", "cancelled"]
     subtotal_amount: Decimal
