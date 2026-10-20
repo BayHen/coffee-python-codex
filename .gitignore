@@ -20,6 +20,7 @@ dist/
 node_modules/
 frontend/dist/
 frontend/build/
+frontend/*.tsbuildinfo
 
 # Editors and operating systems
 .idea/

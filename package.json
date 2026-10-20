@@ -1,0 +1,12 @@
+{
+  "name": "smart-coffee-shop",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:db": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-db.ps1",
+    "dev:api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-api.ps1",
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint",
+    "test": "npm --prefix frontend test"
+  }
+}

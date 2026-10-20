@@ -121,9 +121,20 @@ idempotency. Vô hiệu hóa giữ nguyên lịch sử; nhân viên liên kết 
 bị thu hồi phiên đăng nhập. Xem [docs/people-management.md](docs/people-management.md)
 để biết quan hệ dữ liệu, ma trận quyền, API và hướng dẫn Postman/Bruno.
 
+## Frontend Development (Task 8)
+
+Frontend React + TypeScript nằm trong `frontend/`, gồm login, responsive dashboard,
+Product Management, POS/Orders và Inventory. Chạy `npm.cmd --prefix frontend install`
+rồi `npm.cmd run dev` tại repository root; Vite proxy `/api` về FastAPI cục bộ. Xem
+[docs/frontend.md](docs/frontend.md) để biết route, component tree, RBAC và testing.
+Backend phải chạy riêng bằng `npm.cmd run dev:api` trong terminal đã có `DATABASE_URL`
+và `JWT_SECRET_KEY`.
+Xem [docs/database-connection.md](docs/database-connection.md) để khởi động database,
+backend và frontend theo đúng thứ tự.
+
 ## Cấu hình cục bộ
 
-`.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Ứng dụng **không tự tải** file `.env`; hãy đưa `DATABASE_URL` và `JWT_SECRET_KEY` vào môi trường process trước khi dùng tính năng tương ứng. `.env` đã nằm trong `.gitignore`.
+`.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Lệnh `npm.cmd run dev:api` nạp `.env` cho môi trường development; các cách chạy backend khác cần nhận `DATABASE_URL` và `JWT_SECRET_KEY` từ process. `.env` đã nằm trong `.gitignore`.
 
 ## Git và GitHub
 

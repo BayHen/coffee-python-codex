@@ -1,4 +1,4 @@
-# Task 5 — Order Management
+# Task 5 â€” Order Management
 
 ## State machine
 
@@ -15,22 +15,22 @@ stateDiagram-v2
     cancelled --> [*]
 ```
 
-`paid` và `cancelled` là trạng thái cuối. Staff có thể tạo, sửa draft, xác nhận và
-thanh toán; chỉ Manager/Admin có thể hủy. Mỗi lần tạo, sửa, đổi trạng thái hoặc thử
-thanh toán đều ghi `order_events`.
+`paid` vÃ  `cancelled` lÃ  tráº¡ng thÃ¡i cuá»‘i. Staff cÃ³ thá»ƒ táº¡o, sá»­a draft, xÃ¡c nháº­n vÃ 
+thanh toÃ¡n; chá»‰ Manager/Admin cÃ³ thá»ƒ há»§y. Má»—i láº§n táº¡o, sá»­a, Ä‘á»•i tráº¡ng thÃ¡i hoáº·c thá»­
+thanh toÃ¡n Ä‘á»u ghi `order_events`.
 
 ## API
 
-| Method | Path | Mô tả |
+| Method | Path | MÃ´ táº£ |
 | --- | --- | --- |
-| POST | `/orders` | Tạo draft; bắt buộc header `Idempotency-Key` |
-| GET | `/orders` | Danh sách, lọc `status`, pagination |
-| GET | `/orders/{id}` | Chi tiết gồm items, events, payments |
-| PUT | `/orders/{id}` | Thay toàn bộ items/discount khi còn draft |
-| POST | `/orders/{id}/transitions` | Chuyển sang `placed` hoặc `cancelled` |
-| POST | `/orders/{id}/payments` | Thanh toán mô phỏng; bắt buộc idempotency key |
+| POST | `/orders` | Táº¡o draft; báº¯t buá»™c header `Idempotency-Key` |
+| GET | `/orders` | Danh sÃ¡ch, lá»c `status`, pagination |
+| GET | `/orders/{id}` | Chi tiáº¿t gá»“m items, events, payments |
+| PUT | `/orders/{id}` | Thay toÃ n bá»™ items/discount khi cÃ²n draft |
+| POST | `/orders/{id}/transitions` | Chuyá»ƒn sang `placed` hoáº·c `cancelled` |
+| POST | `/orders/{id}/payments` | Thanh toÃ¡n mÃ´ phá»ng; báº¯t buá»™c idempotency key |
 
-Ví dụ tạo đơn:
+VÃ­ dá»¥ táº¡o Ä‘Æ¡n:
 
 ```http
 POST /orders
@@ -51,11 +51,11 @@ Content-Type: application/json
 }
 ```
 
-Client không được gửi tên, giá, subtotal, discount amount hoặc total. Request có
-field thừa bị trả 422. Server khóa variant, kiểm tra product và variant còn bán, rồi
-chụp `product_name`, `variant_name`, `sku`, `unit_price` và `line_total`.
+Client khÃ´ng Ä‘Æ°á»£c gá»­i tÃªn, giÃ¡, subtotal, discount amount hoáº·c total. Request cÃ³
+field thá»«a bá»‹ tráº£ 422. Server khÃ³a variant, kiá»ƒm tra product vÃ  variant cÃ²n bÃ¡n, rá»“i
+chá»¥p `product_name`, `variant_name`, `sku`, `unit_price` vÃ  `line_total`.
 
-Ví dụ response rút gọn:
+VÃ­ dá»¥ response rÃºt gá»n:
 
 ```json
 {
@@ -79,7 +79,7 @@ Ví dụ response rút gọn:
 }
 ```
 
-Thanh toán mô phỏng:
+Thanh toÃ¡n mÃ´ phá»ng:
 
 ```http
 POST /orders/42/payments
@@ -90,47 +90,47 @@ Idempotency-Key: payment-terminal-01-000001
 {"method": "card_demo", "outcome": "succeeded"}
 ```
 
-`method` chỉ nhận `cash` hoặc `card_demo`; `outcome` cho phép test `succeeded` và
-`failed`. API không kết nối cổng thanh toán và không xử lý tiền thật.
+`method` chá»‰ nháº­n `cash` hoáº·c `card_demo`; `outcome` cho phÃ©p test `succeeded` vÃ 
+`failed`. API khÃ´ng káº¿t ná»‘i cá»•ng thanh toÃ¡n vÃ  khÃ´ng xá»­ lÃ½ tiá»n tháº­t.
 
-## Tiền, discount và transaction
+## Tiá»n, discount vÃ  transaction
 
-- Tất cả số tiền dùng `Decimal`/`NUMERIC`, làm tròn `ROUND_HALF_UP` đến 2 chữ số.
-- Discount là phần trăm từ 0 đến 20. Discount dương bắt buộc có lý do.
-- `subtotal = SUM(unit_price × quantity)`.
-- `discount_amount = round(subtotal × discount_percent / 100, 2)`.
+- Táº¥t cáº£ sá»‘ tiá»n dÃ¹ng `Decimal`/`NUMERIC`, lÃ m trÃ²n `ROUND_HALF_UP` Ä‘áº¿n 2 chá»¯ sá»‘.
+- Discount lÃ  pháº§n trÄƒm tá»« 0 Ä‘áº¿n 20. Discount dÆ°Æ¡ng báº¯t buá»™c cÃ³ lÃ½ do.
+- `subtotal = SUM(unit_price Ã— quantity)`.
+- `discount_amount = round(subtotal Ã— discount_percent / 100, 2)`.
 - `total = subtotal - discount_amount`.
-- Subtotal phải dương. Database kiểm tra thành phần tổng, line total và giới hạn discount.
+- Subtotal pháº£i dÆ°Æ¡ng. Database kiá»ƒm tra thÃ nh pháº§n tá»•ng, line total vÃ  giá»›i háº¡n discount.
 
-Tạo đơn chạy trong một `session.begin()`: kiểm tra idempotency, khóa các variant theo
-thứ tự ID, chụp giá/tên, tính tổng, ghi order/items/event rồi commit cùng lúc. Việc
-khóa cả product và variant ngăn cập nhật menu chen giữa lúc kiểm tra trạng thái và
-chụp giá.
+Táº¡o Ä‘Æ¡n cháº¡y trong má»™t `session.begin()`: kiá»ƒm tra idempotency, khÃ³a cÃ¡c variant theo
+thá»© tá»± ID, chá»¥p giÃ¡/tÃªn, tÃ­nh tá»•ng, ghi order/items/event rá»“i commit cÃ¹ng lÃºc. Viá»‡c
+khÃ³a cáº£ product vÃ  variant ngÄƒn cáº­p nháº­t menu chen giá»¯a lÃºc kiá»ƒm tra tráº¡ng thÃ¡i vÃ 
+chá»¥p giÃ¡.
 
-Thanh toán khóa dòng order bằng `SELECT FOR UPDATE`. Hai request đồng thời vì vậy
-được tuần tự hóa; request thứ hai thấy order đã `paid` và bị từ chối. Unique key trên
-`payments.idempotency_key` chống replay, còn partial unique index trên một payment
-`succeeded` mỗi order là lớp bảo vệ cuối ở database. Retry cùng key và cùng payload
-trả lại bản ghi cũ; dùng lại key với payload khác trả 409.
+Thanh toÃ¡n khÃ³a dÃ²ng order báº±ng `SELECT FOR UPDATE`. Hai request Ä‘á»“ng thá»i vÃ¬ váº­y
+Ä‘Æ°á»£c tuáº§n tá»± hÃ³a; request thá»© hai tháº¥y order Ä‘Ã£ `paid` vÃ  bá»‹ tá»« chá»‘i. Unique key trÃªn
+`payments.idempotency_key` chá»‘ng replay, cÃ²n partial unique index trÃªn má»™t payment
+`succeeded` má»—i order lÃ  lá»›p báº£o vá»‡ cuá»‘i á»Ÿ database. Retry cÃ¹ng key vÃ  cÃ¹ng payload
+tráº£ láº¡i báº£n ghi cÅ©; dÃ¹ng láº¡i key vá»›i payload khÃ¡c tráº£ 409.
 
-Task này không ghi `inventory_transactions` và không trừ nguyên liệu.
+Task nÃ y khÃ´ng ghi `inventory_transactions` vÃ  khÃ´ng trá»« nguyÃªn liá»‡u.
 
-## Lỗi thường gặp
+## Lá»—i thÆ°á»ng gáº·p
 
-- Gửi giá hoặc total từ POS: 422 vì request cấm field thừa.
-- Dùng một variant hai lần: 422; tăng `quantity` trên một dòng.
-- Discount trên 20% hoặc thiếu lý do: 422.
-- Product/variant đã ngừng bán: 409 `variant_unavailable`.
-- Sửa đơn sau khi placed: 409 `order_not_editable`.
-- Chuyển trạng thái sai: 409 `invalid_order_transition`.
-- Thanh toán draft/paid/cancelled: 409 `order_not_payable`.
-- Dùng lại idempotency key cho payload khác: 409 `idempotency_key_reused`.
-- Staff hủy đơn: 403.
+- Gá»­i giÃ¡ hoáº·c total tá»« POS: 422 vÃ¬ request cáº¥m field thá»«a.
+- DÃ¹ng má»™t variant hai láº§n: 422; tÄƒng `quantity` trÃªn má»™t dÃ²ng.
+- Discount trÃªn 20% hoáº·c thiáº¿u lÃ½ do: 422.
+- Product/variant Ä‘Ã£ ngá»«ng bÃ¡n: 409 `variant_unavailable`.
+- Sá»­a Ä‘Æ¡n sau khi placed: 409 `order_not_editable`.
+- Chuyá»ƒn tráº¡ng thÃ¡i sai: 409 `invalid_order_transition`.
+- Thanh toÃ¡n draft/paid/cancelled: 409 `order_not_payable`.
+- DÃ¹ng láº¡i idempotency key cho payload khÃ¡c: 409 `idempotency_key_reused`.
+- Staff há»§y Ä‘Æ¡n: 403.
 
-## Chạy migration và test
+## Cháº¡y migration vÃ  test
 
-Đọc revision `e5a8c2d4f6b7` trước khi áp dụng. Migration backfill snapshot và totals
-cho dữ liệu cũ; downgrade bị chặn vì cần kế hoạch bảo toàn lịch sử.
+Äá»c revision `e5a8c2d4f6b7` trÆ°á»›c khi Ã¡p dá»¥ng. Migration backfill snapshot vÃ  totals
+cho dá»¯ liá»‡u cÅ©; downgrade bá»‹ cháº·n vÃ¬ cáº§n káº¿ hoáº¡ch báº£o toÃ n lá»‹ch sá»­.
 
 ```powershell
 $env:DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coffee_shop_dev'
@@ -140,25 +140,25 @@ $env:TEST_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coff
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Test concurrency tạo dữ liệu có suffix ngẫu nhiên trong database `_test`, chạy hai
-payment bằng hai connection thật, xác nhận chỉ một payment thành công, rồi xóa đúng
-các bản ghi test đã tạo.
+Test concurrency táº¡o dá»¯ liá»‡u cÃ³ suffix ngáº«u nhiÃªn trong database `_test`, cháº¡y hai
+payment báº±ng hai connection tháº­t, xÃ¡c nháº­n chá»‰ má»™t payment thÃ nh cÃ´ng, rá»“i xÃ³a Ä‘Ãºng
+cÃ¡c báº£n ghi test Ä‘Ã£ táº¡o.
 
 ## Checklist
 
-- [x] Server lấy giá hiện tại và tự tính tổng.
-- [x] Snapshot tên, SKU, giá và line total.
-- [x] Decimal, discount validation và database constraints.
-- [x] State machine và event history.
-- [x] Soft history độc lập với thay đổi menu.
-- [x] Idempotency cho create order và payment.
-- [x] Row lock cùng unique constraints chống double payment.
-- [x] Không trừ kho trong Task 5.
+- [x] Server láº¥y giÃ¡ hiá»‡n táº¡i vÃ  tá»± tÃ­nh tá»•ng.
+- [x] Snapshot tÃªn, SKU, giÃ¡ vÃ  line total.
+- [x] Decimal, discount validation vÃ  database constraints.
+- [x] State machine vÃ  event history.
+- [x] Soft history Ä‘á»™c láº­p vá»›i thay Ä‘á»•i menu.
+- [x] Idempotency cho create order vÃ  payment.
+- [x] Row lock cÃ¹ng unique constraints chá»‘ng double payment.
+- [x] KhÃ´ng trá»« kho trong Task 5.
 
-## Câu hỏi kiến thức
+## CÃ¢u há»i kiáº¿n thá»©c
 
-1. Vì sao unique idempotency key vẫn cần request fingerprint?
-2. `SELECT FOR UPDATE` bảo vệ double payment khác gì partial unique index?
-3. Vì sao `OrderItem` phải lưu snapshot thay vì luôn join giá hiện tại?
-4. Điều gì xảy ra nếu tính tiền bằng `float` và làm tròn ở cuối?
-5. Vì sao event và thay đổi trạng thái phải commit trong cùng transaction?
+1. VÃ¬ sao unique idempotency key váº«n cáº§n request fingerprint?
+2. `SELECT FOR UPDATE` báº£o vá»‡ double payment khÃ¡c gÃ¬ partial unique index?
+3. VÃ¬ sao `OrderItem` pháº£i lÆ°u snapshot thay vÃ¬ luÃ´n join giÃ¡ hiá»‡n táº¡i?
+4. Äiá»u gÃ¬ xáº£y ra náº¿u tÃ­nh tiá»n báº±ng `float` vÃ  lÃ m trÃ²n á»Ÿ cuá»‘i?
+5. VÃ¬ sao event vÃ  thay Ä‘á»•i tráº¡ng thÃ¡i pháº£i commit trong cÃ¹ng transaction?

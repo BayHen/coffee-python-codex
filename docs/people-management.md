@@ -1,54 +1,54 @@
 # Customer & Employee Management (Task 7)
 
-## Phạm vi và quan hệ dữ liệu
+## Pháº¡m vi vÃ  quan há»‡ dá»¯ liá»‡u
 
-Module `people` quản lý hồ sơ khách hàng, nhân viên và sổ cái điểm thưởng. MVP không lưu địa chỉ, ngày sinh hoặc giấy tờ định danh vì nghiệp vụ chưa dùng các dữ liệu đó.
+Module `people` quáº£n lÃ½ há»“ sÆ¡ khÃ¡ch hÃ ng, nhÃ¢n viÃªn vÃ  sá»• cÃ¡i Ä‘iá»ƒm thÆ°á»Ÿng. MVP khÃ´ng lÆ°u Ä‘á»‹a chá»‰, ngÃ y sinh hoáº·c giáº¥y tá» Ä‘á»‹nh danh vÃ¬ nghiá»‡p vá»¥ chÆ°a dÃ¹ng cÃ¡c dá»¯ liá»‡u Ä‘Ã³.
 
 ```mermaid
 erDiagram
-    ROLES ||--o{ USERS : "phân quyền"
-    USERS ||--o| EMPLOYEES : "có thể liên kết"
-    EMPLOYEES ||--o{ ORDERS : "tiếp nhận"
-    CUSTOMERS ||--o{ ORDERS : "mua hàng"
-    CUSTOMERS ||--o{ LOYALTY_TRANSACTIONS : "có sổ cái"
-    ORDERS ||--o{ LOYALTY_TRANSACTIONS : "phát sinh earn/refund"
-    USERS ||--o{ LOYALTY_TRANSACTIONS : "thực hiện điều chỉnh"
+    ROLES ||--o{ USERS : "phÃ¢n quyá»n"
+    USERS ||--o| EMPLOYEES : "cÃ³ thá»ƒ liÃªn káº¿t"
+    EMPLOYEES ||--o{ ORDERS : "tiáº¿p nháº­n"
+    CUSTOMERS ||--o{ ORDERS : "mua hÃ ng"
+    CUSTOMERS ||--o{ LOYALTY_TRANSACTIONS : "cÃ³ sá»• cÃ¡i"
+    ORDERS ||--o{ LOYALTY_TRANSACTIONS : "phÃ¡t sinh earn/refund"
+    USERS ||--o{ LOYALTY_TRANSACTIONS : "thá»±c hiá»‡n Ä‘iá»u chá»‰nh"
 ```
 
-- `Employee.user_id` nullable và unique: nhân viên chỉ liên kết `User` khi cần đăng nhập; một tài khoản không thể đại diện hai nhân viên.
-- `Order.customer_id` và `Order.employee_id` giữ quan hệ lịch sử. Vô hiệu hóa dùng `is_active`, không xóa dòng.
-- Điểm hiện tại là `SUM(loyalty_transactions.points_delta)`, tránh một cột số dư có thể lệch khỏi lịch sử.
-- Unique index có điều kiện bảo đảm mỗi order chỉ có tối đa một dòng `earn` và một dòng `refund`. `idempotency_key` unique cùng fingerprint ngăn retry tạo thêm giao dịch hoặc đổi payload.
-- Email khách hàng và mã nhân viên có unique index không phân biệt hoa thường.
+- `Employee.user_id` nullable vÃ  unique: nhÃ¢n viÃªn chá»‰ liÃªn káº¿t `User` khi cáº§n Ä‘Äƒng nháº­p; má»™t tÃ i khoáº£n khÃ´ng thá»ƒ Ä‘áº¡i diá»‡n hai nhÃ¢n viÃªn.
+- `Order.customer_id` vÃ  `Order.employee_id` giá»¯ quan há»‡ lá»‹ch sá»­. VÃ´ hiá»‡u hÃ³a dÃ¹ng `is_active`, khÃ´ng xÃ³a dÃ²ng.
+- Äiá»ƒm hiá»‡n táº¡i lÃ  `SUM(loyalty_transactions.points_delta)`, trÃ¡nh má»™t cá»™t sá»‘ dÆ° cÃ³ thá»ƒ lá»‡ch khá»i lá»‹ch sá»­.
+- Unique index cÃ³ Ä‘iá»u kiá»‡n báº£o Ä‘áº£m má»—i order chá»‰ cÃ³ tá»‘i Ä‘a má»™t dÃ²ng `earn` vÃ  má»™t dÃ²ng `refund`. `idempotency_key` unique cÃ¹ng fingerprint ngÄƒn retry táº¡o thÃªm giao dá»‹ch hoáº·c Ä‘á»•i payload.
+- Email khÃ¡ch hÃ ng vÃ  mÃ£ nhÃ¢n viÃªn cÃ³ unique index khÃ´ng phÃ¢n biá»‡t hoa thÆ°á»ng.
 
-Trước khi migrate database có dữ liệu, kiểm tra email khách hàng hoặc mã nhân viên trùng nhau khi chuyển sang chữ thường. Migration không tự sửa dữ liệu nghiệp vụ và `downgrade` bị chặn vì sẽ xóa audit ledger.
+TrÆ°á»›c khi migrate database cÃ³ dá»¯ liá»‡u, kiá»ƒm tra email khÃ¡ch hÃ ng hoáº·c mÃ£ nhÃ¢n viÃªn trÃ¹ng nhau khi chuyá»ƒn sang chá»¯ thÆ°á»ng. Migration khÃ´ng tá»± sá»­a dá»¯ liá»‡u nghiá»‡p vá»¥ vÃ  `downgrade` bá»‹ cháº·n vÃ¬ sáº½ xÃ³a audit ledger.
 
-## Quy tắc nghiệp vụ
+## Quy táº¯c nghiá»‡p vá»¥
 
-- Một đơn `paid` có khách hàng nhận `floor(total_amount / 10.00)` điểm. Tổng tiền là `Decimal/Numeric` do server tính.
-- Thanh toán retry cùng `Idempotency-Key` trả payment cũ; unique constraint theo order tiếp tục ngăn cộng điểm lần hai.
-- Hoàn điểm tạo một dòng âm bằng đúng điểm đã nhận. Chỉ Admin/Manager thực hiện, chỉ một lần mỗi order, và số dư không được âm.
-- Điều chỉnh thủ công cần lý do, `Idempotency-Key`, quyền Admin/Manager và không được làm số dư âm.
-- Vô hiệu hóa Employee liên kết sẽ vô hiệu hóa User và thu hồi refresh session. Access token cũ không qua dependency. Kích hoạt lại Employee không tự kích hoạt User; Admin phải chủ động mở User qua API auth hiện có.
-- Manager chỉ liên kết và quản lý Employee gắn tài khoản Staff. Admin quản lý mọi vai trò. Không ai được tự vô hiệu hóa chính mình qua Employee API.
+- Má»™t Ä‘Æ¡n `paid` cÃ³ khÃ¡ch hÃ ng nháº­n `floor(total_amount / 10.00)` Ä‘iá»ƒm. Tá»•ng tiá»n lÃ  `Decimal/Numeric` do server tÃ­nh.
+- Thanh toÃ¡n retry cÃ¹ng `Idempotency-Key` tráº£ payment cÅ©; unique constraint theo order tiáº¿p tá»¥c ngÄƒn cá»™ng Ä‘iá»ƒm láº§n hai.
+- HoÃ n Ä‘iá»ƒm táº¡o má»™t dÃ²ng Ã¢m báº±ng Ä‘Ãºng Ä‘iá»ƒm Ä‘Ã£ nháº­n. Chá»‰ Admin/Manager thá»±c hiá»‡n, chá»‰ má»™t láº§n má»—i order, vÃ  sá»‘ dÆ° khÃ´ng Ä‘Æ°á»£c Ã¢m.
+- Äiá»u chá»‰nh thá»§ cÃ´ng cáº§n lÃ½ do, `Idempotency-Key`, quyá»n Admin/Manager vÃ  khÃ´ng Ä‘Æ°á»£c lÃ m sá»‘ dÆ° Ã¢m.
+- VÃ´ hiá»‡u hÃ³a Employee liÃªn káº¿t sáº½ vÃ´ hiá»‡u hÃ³a User vÃ  thu há»“i refresh session. Access token cÅ© khÃ´ng qua dependency. KÃ­ch hoáº¡t láº¡i Employee khÃ´ng tá»± kÃ­ch hoáº¡t User; Admin pháº£i chá»§ Ä‘á»™ng má»Ÿ User qua API auth hiá»‡n cÃ³.
+- Manager chá»‰ liÃªn káº¿t vÃ  quáº£n lÃ½ Employee gáº¯n tÃ i khoáº£n Staff. Admin quáº£n lÃ½ má»i vai trÃ². KhÃ´ng ai Ä‘Æ°á»£c tá»± vÃ´ hiá»‡u hÃ³a chÃ­nh mÃ¬nh qua Employee API.
 
-## API và quyền
+## API vÃ  quyá»n
 
 | Method | Endpoint | Staff | Manager/Admin |
 |---|---|---:|---:|
-| GET/POST | `/customers` | Có | Có |
-| GET/PATCH | `/customers/{id}` | Có; Staff không đổi trạng thái | Có |
-| DELETE | `/customers/{id}` | Không | Soft disable |
-| GET | `/customers/{id}/orders` | Có | Có |
-| GET | `/customers/{id}/loyalty` | Có | Có |
-| POST | `/customers/{id}/loyalty-adjustments` | Không | Có |
-| POST | `/orders/{id}/loyalty-refund` | Không | Có |
-| GET | `/employees`, `/employees/{id}` | Có | Có |
-| POST/PATCH/DELETE | `/employees...` | Không | Có, theo phạm vi vai trò |
+| GET/POST | `/customers` | CÃ³ | CÃ³ |
+| GET/PATCH | `/customers/{id}` | CÃ³; Staff khÃ´ng Ä‘á»•i tráº¡ng thÃ¡i | CÃ³ |
+| DELETE | `/customers/{id}` | KhÃ´ng | Soft disable |
+| GET | `/customers/{id}/orders` | CÃ³ | CÃ³ |
+| GET | `/customers/{id}/loyalty` | CÃ³ | CÃ³ |
+| POST | `/customers/{id}/loyalty-adjustments` | KhÃ´ng | CÃ³ |
+| POST | `/orders/{id}/loyalty-refund` | KhÃ´ng | CÃ³ |
+| GET | `/employees`, `/employees/{id}` | CÃ³ | CÃ³ |
+| POST/PATCH/DELETE | `/employees...` | KhÃ´ng | CÃ³, theo pháº¡m vi vai trÃ² |
 
-List API nhận `search`, `is_active`, `page` và `page_size` (1–100). Customer search theo tên, phone, email; Employee search theo tên và mã. Response Employee không có email, password hash, token hoặc session. Lịch sử đơn khách hàng chỉ trả metadata và tổng tiền, không trả chi tiết item.
+List API nháº­n `search`, `is_active`, `page` vÃ  `page_size` (1â€“100). Customer search theo tÃªn, phone, email; Employee search theo tÃªn vÃ  mÃ£. Response Employee khÃ´ng cÃ³ email, password hash, token hoáº·c session. Lá»‹ch sá»­ Ä‘Æ¡n khÃ¡ch hÃ ng chá»‰ tráº£ metadata vÃ  tá»•ng tiá»n, khÃ´ng tráº£ chi tiáº¿t item.
 
-## JSON mẫu
+## JSON máº«u
 
 ```http
 POST /customers
@@ -58,25 +58,25 @@ Content-Type: application/json
 {"full_name":"Nguyen An","phone":"+84912345678","email":"an@example.com"}
 ```
 
-Tạo nhân viên và liên kết tài khoản đã có:
+Táº¡o nhÃ¢n viÃªn vÃ  liÃªn káº¿t tÃ i khoáº£n Ä‘Ã£ cÃ³:
 
 ```json
 {"employee_code":"STAFF-001","full_name":"Tran Binh","user_id":12,"is_active":true}
 ```
 
-Điều chỉnh điểm với header `Idempotency-Key: loyalty-adjust-20261019-001`:
+Äiá»u chá»‰nh Ä‘iá»ƒm vá»›i header `Idempotency-Key: loyalty-adjust-20261019-001`:
 
 ```json
 {"points_delta":5,"reason":"Service recovery"}
 ```
 
-Hoàn điểm order, dùng một idempotency key ổn định riêng cho sự kiện:
+HoÃ n Ä‘iá»ƒm order, dÃ¹ng má»™t idempotency key á»•n Ä‘á»‹nh riÃªng cho sá»± kiá»‡n:
 
 ```json
 {"reason":"Payment refunded"}
 ```
 
-Lỗi nghiệp vụ chuẩn hóa:
+Lá»—i nghiá»‡p vá»¥ chuáº©n hÃ³a:
 
 ```json
 {"detail":{"code":"insufficient_loyalty_points","message":"Loyalty balance cannot become negative"}}
@@ -84,14 +84,14 @@ Lỗi nghiệp vụ chuẩn hóa:
 
 ## Postman / Bruno
 
-1. Tạo environment `baseUrl=http://127.0.0.1:8000`, `accessToken`, `customerId`, `employeeId`.
-2. Gọi `POST {{baseUrl}}/auth/login`, lưu `access_token` vào `accessToken`.
-3. Đặt header chung `Authorization: Bearer {{accessToken}}` và `Content-Type: application/json`.
-4. Với create order, payment và loyalty write, thêm `Idempotency-Key`. Retry giữ nguyên key và body; nghiệp vụ mới dùng key mới.
-5. Chạy create customer, tạo và thanh toán order, GET customer, GET loyalty, adjustment/refund rồi retry cùng key để xác minh không cộng/trừ hai lần.
-6. Dùng token Staff gọi Employee write để thấy `403`; vô hiệu hóa Employee liên kết rồi dùng token cũ để thấy `401`.
+1. Táº¡o environment `baseUrl=http://127.0.0.1:8000`, `accessToken`, `customerId`, `employeeId`.
+2. Gá»i `POST {{baseUrl}}/auth/login`, lÆ°u `access_token` vÃ o `accessToken`.
+3. Äáº·t header chung `Authorization: Bearer {{accessToken}}` vÃ  `Content-Type: application/json`.
+4. Vá»›i create order, payment vÃ  loyalty write, thÃªm `Idempotency-Key`. Retry giá»¯ nguyÃªn key vÃ  body; nghiá»‡p vá»¥ má»›i dÃ¹ng key má»›i.
+5. Cháº¡y create customer, táº¡o vÃ  thanh toÃ¡n order, GET customer, GET loyalty, adjustment/refund rá»“i retry cÃ¹ng key Ä‘á»ƒ xÃ¡c minh khÃ´ng cá»™ng/trá»« hai láº§n.
+6. DÃ¹ng token Staff gá»i Employee write Ä‘á»ƒ tháº¥y `403`; vÃ´ hiá»‡u hÃ³a Employee liÃªn káº¿t rá»“i dÃ¹ng token cÅ© Ä‘á»ƒ tháº¥y `401`.
 
-## Migration và kiểm thử
+## Migration vÃ  kiá»ƒm thá»­
 
 ```powershell
 $env:DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coffee_shop_dev'
@@ -103,4 +103,4 @@ $env:TEST_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coff
 .\.venv\Scripts\python.exe -m ruff format --check .
 ```
 
-Database test phải dùng database riêng có tên kết thúc bằng `_test` và đã migrate tới head. Fixture bọc mỗi test trong transaction rollback.
+Database test pháº£i dÃ¹ng database riÃªng cÃ³ tÃªn káº¿t thÃºc báº±ng `_test` vÃ  Ä‘Ã£ migrate tá»›i head. Fixture bá»c má»—i test trong transaction rollback.

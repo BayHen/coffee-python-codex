@@ -1,41 +1,41 @@
 # Authentication & Authorization (MVP)
 
-## Chính sách
+## ChÃ­nh sÃ¡ch
 
-- Mật khẩu được hash bằng Argon2 (`pwdlib`); `users.password_hash` không chứa mật khẩu gốc. Không có API đăng ký công khai.
-- Access token là JWT HS256, hạn 15 phút. Token chứa `sub` (user ID), `sid` (session ID), `type=access`, `iss`, `aud`, `iat`, `nbf`, `exp`, `jti`. JWT được ký bằng `JWT_SECRET_KEY` từ environment; key phải có ít nhất 32 byte. Server chỉ chấp nhận thuật toán HS256 cố định.
-- Refresh token là chuỗi ngẫu nhiên 256 bit, hạn tuyệt đối 7 ngày kể từ login. `auth_sessions` chỉ lưu SHA-256 hash. Refresh khóa dòng phiên bằng `FOR UPDATE`, thay token hash và trả cặp token mới. Token cũ bị từ chối ngay.
-- Logout đặt `revoked_at` cho phiên. Mỗi request có Bearer token kiểm tra chữ ký JWT **và** phiên trong PostgreSQL, nên cả access và refresh token của phiên bị từ chối ngay sau logout. Khóa tài khoản cũng thu hồi các phiên của tài khoản đó; mở khóa không khôi phục phiên cũ.
-- Role lấy từ database trên mỗi request: thay đổi quyền có hiệu lực ngay. `Admin` quản lý tài khoản, `Manager` xem role, `Staff` chỉ dùng endpoint dành cho người dùng đã xác thực.
-- Email được chuẩn hóa chữ thường khi tạo qua API/script; unique index trên `lower(users.email)` chặn tài khoản trùng chỉ khác chữ hoa/thường. Khi áp dụng migration lên DB đã có dữ liệu, xử lý các email trùng kiểu này trước.
+- Máº­t kháº©u Ä‘Æ°á»£c hash báº±ng Argon2 (`pwdlib`); `users.password_hash` khÃ´ng chá»©a máº­t kháº©u gá»‘c. KhÃ´ng cÃ³ API Ä‘Äƒng kÃ½ cÃ´ng khai.
+- Access token lÃ  JWT HS256, háº¡n 15 phÃºt. Token chá»©a `sub` (user ID), `sid` (session ID), `type=access`, `iss`, `aud`, `iat`, `nbf`, `exp`, `jti`. JWT Ä‘Æ°á»£c kÃ½ báº±ng `JWT_SECRET_KEY` tá»« environment; key pháº£i cÃ³ Ã­t nháº¥t 32 byte. Server chá»‰ cháº¥p nháº­n thuáº­t toÃ¡n HS256 cá»‘ Ä‘á»‹nh.
+- Refresh token lÃ  chuá»—i ngáº«u nhiÃªn 256 bit, háº¡n tuyá»‡t Ä‘á»‘i 7 ngÃ y ká»ƒ tá»« login. `auth_sessions` chá»‰ lÆ°u SHA-256 hash. Refresh khÃ³a dÃ²ng phiÃªn báº±ng `FOR UPDATE`, thay token hash vÃ  tráº£ cáº·p token má»›i. Token cÅ© bá»‹ tá»« chá»‘i ngay.
+- Logout Ä‘áº·t `revoked_at` cho phiÃªn. Má»—i request cÃ³ Bearer token kiá»ƒm tra chá»¯ kÃ½ JWT **vÃ ** phiÃªn trong PostgreSQL, nÃªn cáº£ access vÃ  refresh token cá»§a phiÃªn bá»‹ tá»« chá»‘i ngay sau logout. KhÃ³a tÃ i khoáº£n cÅ©ng thu há»“i cÃ¡c phiÃªn cá»§a tÃ i khoáº£n Ä‘Ã³; má»Ÿ khÃ³a khÃ´ng khÃ´i phá»¥c phiÃªn cÅ©.
+- Role láº¥y tá»« database trÃªn má»—i request: thay Ä‘á»•i quyá»n cÃ³ hiá»‡u lá»±c ngay. `Admin` quáº£n lÃ½ tÃ i khoáº£n, `Manager` xem role, `Staff` chá»‰ dÃ¹ng endpoint dÃ nh cho ngÆ°á»i dÃ¹ng Ä‘Ã£ xÃ¡c thá»±c.
+- Email Ä‘Æ°á»£c chuáº©n hÃ³a chá»¯ thÆ°á»ng khi táº¡o qua API/script; unique index trÃªn `lower(users.email)` cháº·n tÃ i khoáº£n trÃ¹ng chá»‰ khÃ¡c chá»¯ hoa/thÆ°á»ng. Khi Ã¡p dá»¥ng migration lÃªn DB Ä‘Ã£ cÃ³ dá»¯ liá»‡u, xá»­ lÃ½ cÃ¡c email trÃ¹ng kiá»ƒu nÃ y trÆ°á»›c.
 
-Hệ thống chưa tích hợp rate limiting ở edge/proxy. Trước khi mở API ra Internet, cấu hình HTTPS và giới hạn tần suất login/refresh tại reverse proxy hoặc API gateway. Với React, giữ token trong bộ nhớ; không lưu access hoặc refresh token vào `localStorage`/`sessionStorage`. Nếu cần duy trì đăng nhập qua lần tải trang mới, triển khai cookie refresh `HttpOnly`, `Secure`, `SameSite` cùng kiểm soát CSRF trước khi dùng trên production. Xem [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+Há»‡ thá»‘ng chÆ°a tÃ­ch há»£p rate limiting á»Ÿ edge/proxy. TrÆ°á»›c khi má»Ÿ API ra Internet, cáº¥u hÃ¬nh HTTPS vÃ  giá»›i háº¡n táº§n suáº¥t login/refresh táº¡i reverse proxy hoáº·c API gateway. Vá»›i React, giá»¯ token trong bá»™ nhá»›; khÃ´ng lÆ°u access hoáº·c refresh token vÃ o `localStorage`/`sessionStorage`. Náº¿u cáº§n duy trÃ¬ Ä‘Äƒng nháº­p qua láº§n táº£i trang má»›i, triá»ƒn khai cookie refresh `HttpOnly`, `Secure`, `SameSite` cÃ¹ng kiá»ƒm soÃ¡t CSRF trÆ°á»›c khi dÃ¹ng trÃªn production. Xem [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
 
-## Quyền truy cập
+## Quyá»n truy cáº­p
 
 | Endpoint | Admin | Manager | Staff |
 |---|---:|---:|---:|
-| `GET /auth/me`, `POST /auth/logout` | Có | Có | Có |
-| `GET /auth/roles` | Có | Có | 403 |
-| `GET /auth/users`, `POST /auth/users`, `PATCH /auth/users/{id}/status` | Có | 403 | 403 |
+| `GET /auth/me`, `POST /auth/logout` | CÃ³ | CÃ³ | CÃ³ |
+| `GET /auth/roles` | CÃ³ | CÃ³ | 403 |
+| `GET /auth/users`, `POST /auth/users`, `PATCH /auth/users/{id}/status` | CÃ³ | 403 | 403 |
 
-`POST /auth/login` và `POST /auth/refresh` không cần access token. `POST /auth/users` là cách Admin tạo Manager/Staff và Admin bổ sung; chỉ trả thông tin tài khoản, không trả mật khẩu hoặc hash. Admin không thể tự khóa mình qua API này.
+`POST /auth/login` vÃ  `POST /auth/refresh` khÃ´ng cáº§n access token. `POST /auth/users` lÃ  cÃ¡ch Admin táº¡o Manager/Staff vÃ  Admin bá»• sung; chá»‰ tráº£ thÃ´ng tin tÃ i khoáº£n, khÃ´ng tráº£ máº­t kháº©u hoáº·c hash. Admin khÃ´ng thá»ƒ tá»± khÃ³a mÃ¬nh qua API nÃ y.
 
-## HTTP 401 và 403
+## HTTP 401 vÃ  403
 
-| Trường hợp | Status |
+| TrÆ°á»ng há»£p | Status |
 |---|---:|
-| Sai email/mật khẩu | 401 |
-| Thiếu Bearer token, token sai chữ ký, sai loại, hết hạn hoặc phiên đã thu hồi | 401 |
-| Refresh token sai/hết hạn/đã xoay vòng | 401 |
-| Mật khẩu đúng nhưng tài khoản đang bị vô hiệu hóa | 403 |
-| Tài khoản hợp lệ nhưng role không đủ quyền | 403 |
+| Sai email/máº­t kháº©u | 401 |
+| Thiáº¿u Bearer token, token sai chá»¯ kÃ½, sai loáº¡i, háº¿t háº¡n hoáº·c phiÃªn Ä‘Ã£ thu há»“i | 401 |
+| Refresh token sai/háº¿t háº¡n/Ä‘Ã£ xoay vÃ²ng | 401 |
+| Máº­t kháº©u Ä‘Ãºng nhÆ°ng tÃ i khoáº£n Ä‘ang bá»‹ vÃ´ hiá»‡u hÃ³a | 403 |
+| TÃ i khoáº£n há»£p lá»‡ nhÆ°ng role khÃ´ng Ä‘á»§ quyá»n | 403 |
 
-Yêu cầu JSON sai cấu trúc hoặc email không hợp lệ trả 422. Tài khoản mới trùng email trả 409.
+YÃªu cáº§u JSON sai cáº¥u trÃºc hoáº·c email khÃ´ng há»£p lá»‡ tráº£ 422. TÃ i khoáº£n má»›i trÃ¹ng email tráº£ 409.
 
-## Khởi tạo Admin đầu tiên trên Windows
+## Khá»Ÿi táº¡o Admin Ä‘áº§u tiÃªn trÃªn Windows
 
-Từ thư mục gốc, sau khi cài dependencies và chạy migration trên **database development riêng**:
+Tá»« thÆ° má»¥c gá»‘c, sau khi cÃ i dependencies vÃ  cháº¡y migration trÃªn **database development riÃªng**:
 
 ```powershell
 $env:DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/coffee_shop_dev'
@@ -45,22 +45,22 @@ $env:JWT_SECRET_KEY = (.\.venv\Scripts\python.exe -c "import secrets; print(secr
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload
 ```
 
-Script yêu cầu terminal tương tác, hỏi mật khẩu hai lần và không in mật khẩu. Mật khẩu Admin cần tối thiểu 12 ký tự. Script tạo `Admin`, `Manager`, `Staff` nếu chưa có và từ chối tạo Admin bootstrap lần thứ hai. Lưu `JWT_SECRET_KEY` ổn định trong secret manager/environment của dịch vụ; thay key sẽ làm mọi access token hiện tại mất hiệu lực. File `.env` không được tự tải; nếu dùng file này cho máy cá nhân, phải nạp biến vào process theo cách riêng và không commit.
+Script yÃªu cáº§u terminal tÆ°Æ¡ng tÃ¡c, há»i máº­t kháº©u hai láº§n vÃ  khÃ´ng in máº­t kháº©u. Máº­t kháº©u Admin cáº§n tá»‘i thiá»ƒu 12 kÃ½ tá»±. Script táº¡o `Admin`, `Manager`, `Staff` náº¿u chÆ°a cÃ³ vÃ  tá»« chá»‘i táº¡o Admin bootstrap láº§n thá»© hai. LÆ°u `JWT_SECRET_KEY` á»•n Ä‘á»‹nh trong secret manager/environment cá»§a dá»‹ch vá»¥; thay key sáº½ lÃ m má»i access token hiá»‡n táº¡i máº¥t hiá»‡u lá»±c. File `.env` khÃ´ng Ä‘Æ°á»£c tá»± táº£i; náº¿u dÃ¹ng file nÃ y cho mÃ¡y cÃ¡ nhÃ¢n, pháº£i náº¡p biáº¿n vÃ o process theo cÃ¡ch riÃªng vÃ  khÃ´ng commit.
 
-## API và ví dụ cho Postman/Bruno
+## API vÃ  vÃ­ dá»¥ cho Postman/Bruno
 
-Tạo environment `baseUrl=http://127.0.0.1:8000`. Đặt `Content-Type: application/json` cho các POST/PATCH. Thực hiện theo thứ tự:
+Táº¡o environment `baseUrl=http://127.0.0.1:8000`. Äáº·t `Content-Type: application/json` cho cÃ¡c POST/PATCH. Thá»±c hiá»‡n theo thá»© tá»±:
 
-1. **Login:** `POST {{baseUrl}}/auth/login` với body `{"email":"admin@example.com","password":"<your-password>"}`. Response 200:
+1. **Login:** `POST {{baseUrl}}/auth/login` vá»›i body `{"email":"admin@example.com","password":"<your-password>"}`. Response 200:
 
    ```json
    {"access_token":"<jwt>","refresh_token":"<opaque-token>","token_type":"bearer","expires_in":900}
    ```
 
-2. **Dùng quyền:** `GET {{baseUrl}}/auth/me` với header `Authorization: Bearer <jwt>`. Response chứa `id`, `email`, `role`, `is_active`. Trong Postman/Bruno có thể chọn Bearer Auth và dán `access_token`.
-3. **Tạo Staff/Manager:** Admin gọi `POST {{baseUrl}}/auth/users` với Bearer token và body `{"email":"staff@example.com","password":"<new-strong-password>","role":"Staff"}`. Password tối thiểu 12 ký tự; response 201 không chứa password/hash.
-4. **Refresh:** `POST {{baseUrl}}/auth/refresh` với body `{"refresh_token":"<opaque-token>"}`. Thay **cả hai** token trong environment bằng token mới; refresh token cũ trả 401.
-5. **Khóa tài khoản:** Admin gọi `PATCH {{baseUrl}}/auth/users/<id>/status` với body `{"is_active":false}`. Tài khoản bị khóa không login được, phiên cũ bị thu hồi.
-6. **Logout:** `POST {{baseUrl}}/auth/logout` với Bearer access token. Response 204; gọi lại `/auth/me` hoặc `/auth/refresh` bằng token phiên đó trả 401.
+2. **DÃ¹ng quyá»n:** `GET {{baseUrl}}/auth/me` vá»›i header `Authorization: Bearer <jwt>`. Response chá»©a `id`, `email`, `role`, `is_active`. Trong Postman/Bruno cÃ³ thá»ƒ chá»n Bearer Auth vÃ  dÃ¡n `access_token`.
+3. **Táº¡o Staff/Manager:** Admin gá»i `POST {{baseUrl}}/auth/users` vá»›i Bearer token vÃ  body `{"email":"staff@example.com","password":"<new-strong-password>","role":"Staff"}`. Password tá»‘i thiá»ƒu 12 kÃ½ tá»±; response 201 khÃ´ng chá»©a password/hash.
+4. **Refresh:** `POST {{baseUrl}}/auth/refresh` vá»›i body `{"refresh_token":"<opaque-token>"}`. Thay **cáº£ hai** token trong environment báº±ng token má»›i; refresh token cÅ© tráº£ 401.
+5. **KhÃ³a tÃ i khoáº£n:** Admin gá»i `PATCH {{baseUrl}}/auth/users/<id>/status` vá»›i body `{"is_active":false}`. TÃ i khoáº£n bá»‹ khÃ³a khÃ´ng login Ä‘Æ°á»£c, phiÃªn cÅ© bá»‹ thu há»“i.
+6. **Logout:** `POST {{baseUrl}}/auth/logout` vá»›i Bearer access token. Response 204; gá»i láº¡i `/auth/me` hoáº·c `/auth/refresh` báº±ng token phiÃªn Ä‘Ã³ tráº£ 401.
 
-Các response token có `Cache-Control: no-store`. Không đưa token thật, mật khẩu hoặc JWT secret vào collection được commit. Có thể thử các endpoint và schema trong `/docs`.
+CÃ¡c response token cÃ³ `Cache-Control: no-store`. KhÃ´ng Ä‘Æ°a token tháº­t, máº­t kháº©u hoáº·c JWT secret vÃ o collection Ä‘Æ°á»£c commit. CÃ³ thá»ƒ thá»­ cÃ¡c endpoint vÃ  schema trong `/docs`.
