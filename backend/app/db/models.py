@@ -279,6 +279,12 @@ class Payment(Base):
             unique=True,
             postgresql_where=text("status = 'succeeded'"),
         ),
+        Index(
+            "ix_payments_reporting_status_created_order",
+            "status",
+            "created_at",
+            "order_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)

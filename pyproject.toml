@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.14,<2",
     "email-validator>=2,<3",
     "fastapi>=0.115,<1",
+    "openai>=2,<3",
     "pwdlib[argon2]>=0.2,<1",
     "PyJWT>=2.10,<3",
     "psycopg[binary]>=3.2,<4",

@@ -11,6 +11,12 @@ export type Payment = { id: number; order_id: number; method: string; status: st
 export type Order = { id: number; customer_id: number | null; employee_id: number | null; status: OrderStatus; subtotal_amount: string; discount_percent: string; discount_amount: string; total_amount: string; created_at: string; items: OrderItem[]; events: unknown[]; payments: Payment[] };
 export type Ingredient = { id: number; sku: string; name: string; unit: "g" | "ml" | "piece"; low_stock_threshold: string; current_stock: string; is_low_stock: boolean; is_active: boolean };
 export type InventoryTransaction = { id: number; ingredient_id: number; order_item_id: number | null; actor_user_id: number | null; reversal_of_id: number | null; transaction_type: string; quantity_delta: string; reason: string; created_at: string };
+export type RevenueSummary = { date_from: string; date_to: string; timezone: string; total_revenue: string; valid_order_count: number; average_order_value: string; refunded_amount: string; refunded_payment_count: number };
+export type DailyRevenuePoint = { date: string; revenue: string; order_count: number };
+export type DailyRevenueReport = { date_from: string; date_to: string; timezone: string; items: DailyRevenuePoint[] };
+export type TopProduct = { product_name: string; variant_name: string; sku: string; quantity_sold: number; gross_item_sales: string };
+export type TopProductsReport = { date_from: string; date_to: string; timezone: string; items: TopProduct[] };
+export type AIChatResponse = { answer: string; highlights: string[]; recommendations: string[]; tools_used: string[]; request_id: string };
 
 export function money(value: string | number): string {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 2 }).format(Number(value));

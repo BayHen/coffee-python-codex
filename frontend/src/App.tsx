@@ -7,11 +7,17 @@ import { ProductsPage } from "./pages/ProductsPage";
 import { PosPage } from "./pages/PosPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { InventoryPage } from "./pages/InventoryPage";
+import { AssistantPage } from "./pages/AssistantPage";
 
 function Protected() {
   const { user } = useAuth();
   const location = useLocation();
   return user ? <AppLayout /> : <Navigate to="/login" state={{ from: location.pathname }} replace />;
+}
+
+function ManagementOnly() {
+  const { canManage } = useAuth();
+  return canManage ? <AssistantPage /> : <Navigate to="/" replace />;
 }
 
 export function App() {
@@ -23,6 +29,7 @@ export function App() {
       <Route path="pos" element={<PosPage />} />
       <Route path="orders" element={<OrdersPage />} />
       <Route path="inventory" element={<InventoryPage />} />
+      <Route path="assistant" element={<ManagementOnly />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></BrowserRouter></AuthProvider>;

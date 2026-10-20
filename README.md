@@ -132,6 +132,14 @@ và `JWT_SECRET_KEY`.
 Xem [docs/database-connection.md](docs/database-connection.md) để khởi động database,
 backend và frontend theo đúng thứ tự.
 
+## Revenue Dashboard và AI Assistant (Task 9–10)
+
+Admin và Manager có báo cáo doanh thu theo ngày, sản phẩm bán chạy và bộ lọc thời gian.
+Module AI cung cấp endpoint `POST /ai/chat` và giao diện `/assistant`, chỉ dùng ba công cụ
+đọc dữ liệu đã tổng hợp. Cấu hình `OPENAI_API_KEY` ở backend; không đặt key trong biến
+`VITE_*` hoặc source frontend. Xem [docs/revenue-reporting.md](docs/revenue-reporting.md)
+và [docs/ai-management-assistant.md](docs/ai-management-assistant.md).
+
 ## Cấu hình cục bộ
 
 `.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Lệnh `npm.cmd run dev:api` nạp `.env` cho môi trường development; các cách chạy backend khác cần nhận `DATABASE_URL` và `JWT_SECRET_KEY` từ process. `.env` đã nằm trong `.gitignore`.
