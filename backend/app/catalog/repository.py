@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Category, Product, ProductTopping, ProductVariant
+from app.db.models import Category, OrderItem, Product, ProductTopping, ProductVariant
 
 
 class CatalogRepository:
@@ -137,6 +137,17 @@ class CatalogRepository:
 
     def add_variant(self, variant: ProductVariant) -> None:
         self.db.add(variant)
+
+    def remove_unused_automatic_variant(self, product_id: int) -> None:
+        variant = self.db.scalar(
+            select(ProductVariant).where(
+                ProductVariant.product_id == product_id,
+                ProductVariant.sku == f"AUTO-{product_id}",
+                ~exists().where(OrderItem.variant_id == ProductVariant.id),
+            )
+        )
+        if variant is not None:
+            self.db.delete(variant)
 
     def get_topping(
         self, product_id: int, topping_id: int, *, lock: bool = False

@@ -29,7 +29,7 @@ export function OrdersPage() {
       setTables(rows);
       setProducts(Array.isArray(productPage.items) ? productPage.items.map((product) => ({
         ...product,
-        base_price: product.base_price ?? "0.00",
+        base_price: requireOrderPrice(product.base_price, product.name),
         variants: Array.isArray(product.variants) ? product.variants : [],
         toppings: Array.isArray(product.toppings) ? product.toppings : [],
       })) : []);
@@ -80,6 +80,13 @@ function CheckoutDialog({ session, close, paid }: { session: TableSession; close
 
 function Bill({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-stone-100 p-4"><span className="text-sm text-stone-500">{label}</span><strong className="mt-1 block text-xl">{money(value)}</strong></div>; }
 
+function requireOrderPrice(value: string | undefined, productName: string): string {
+  if (value == null || value.trim() === "" || !Number.isFinite(Number(value))) {
+    throw new Error(`API thiếu giá cơ bản hợp lệ cho sản phẩm ${productName}`);
+  }
+  return value;
+}
+
 function ProductPicker({ products, order, busy, change }: { products: Product[]; order: SessionOrder; busy: boolean; change: (operation: () => Promise<unknown>) => Promise<void> }) {
   const [productId, setProductId] = useState(""); const [sizeId, setSizeId] = useState(""); const [toppings, setToppings] = useState<number[]>([]); const [quantity, setQuantity] = useState(1);
   const product = products.find((item) => item.id === Number(productId));
@@ -88,7 +95,7 @@ function ProductPicker({ products, order, busy, change }: { products: Product[];
   const size = variants.find((item) => item.id === Number(sizeId));
   const basePrice = Number(product?.base_price ?? 0);
   const unitPrice = basePrice + Number(size?.price ?? 0) + availableToppings.filter((item) => toppings.includes(item.id)).reduce((sum, item) => sum + Number(item.price), 0);
-  return <section className="mb-5 rounded-xl bg-stone-100 p-4"><h3 className="font-serif text-xl font-bold">Thêm món vào đơn nháp #{order.sequence_number}</h3><div className="mt-3 grid gap-3 md:grid-cols-4"><select className="field" aria-label="Chọn sản phẩm" value={productId} onChange={(event) => { setProductId(event.target.value); setSizeId(""); setToppings([]); }}><option value="">Chọn sản phẩm</option>{products.map((item) => <option key={item.id} value={item.id}>{item.name} · giá gốc {money(item.base_price)}</option>)}</select><select className="field" aria-label="Chọn size" value={sizeId} onChange={(event) => setSizeId(event.target.value)} disabled={!product}><option value="">Chọn size</option>{variants.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.name} · {money(basePrice + Number(item.price))}</option>)}</select><Input aria-label="Số lượng" type="number" min="1" max="100" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /><Button className="btn-primary" disabled={busy || !size || quantity < 1} onClick={() => void change(() => request(`/orders/${order.id}/items`, { method: "POST", body: JSON.stringify({ variant_id: Number(sizeId), topping_ids: toppings, quantity }) }))}>Thêm · {money(unitPrice * quantity)}</Button></div>{availableToppings.length > 0 && <div className="mt-3 flex flex-wrap gap-3">{availableToppings.map((item) => <label key={item.id} className="flex items-center gap-2"><input type="checkbox" checked={toppings.includes(item.id)} onChange={(event) => setToppings((old) => event.target.checked ? [...old, item.id] : old.filter((id) => id !== item.id))} />{item.name} +{money(item.price)}</label>)}</div>}</section>;
+  return <section className="mb-5 rounded-xl bg-stone-100 p-4"><h3 className="font-serif text-xl font-bold">Thêm món vào đơn nháp #{order.sequence_number}</h3><div className="mt-3 grid gap-3 md:grid-cols-4"><select className="field" aria-label="Chọn sản phẩm" value={productId} onChange={(event) => { const id = event.target.value; const selectedProduct = products.find((item) => item.id === Number(id)); const activeVariants = selectedProduct?.variants.filter((item) => item.is_active) ?? []; setProductId(id); setSizeId(activeVariants.length === 1 ? String(activeVariants[0].id) : ""); setToppings([]); }}><option value="">Chọn sản phẩm</option>{products.map((item) => <option key={item.id} value={item.id}>{item.name} · giá gốc {money(item.base_price)}</option>)}</select><select className="field" aria-label="Chọn size" value={sizeId} onChange={(event) => setSizeId(event.target.value)} disabled={!product}><option value="">Chọn size</option>{variants.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.name} · {money(basePrice + Number(item.price))}</option>)}</select><Input aria-label="Số lượng" type="number" min="1" max="100" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /><Button className="btn-primary" disabled={busy || !size || quantity < 1} onClick={() => void change(() => request(`/orders/${order.id}/items`, { method: "POST", body: JSON.stringify({ variant_id: Number(sizeId), topping_ids: toppings, quantity }) }))}>Thêm · {money(unitPrice * quantity)}</Button></div>{availableToppings.length > 0 && <div className="mt-3 flex flex-wrap gap-3">{availableToppings.map((item) => <label key={item.id} className="flex items-center gap-2"><input type="checkbox" checked={toppings.includes(item.id)} onChange={(event) => setToppings((old) => event.target.checked ? [...old, item.id] : old.filter((id) => id !== item.id))} />{item.name} +{money(item.price)}</label>)}</div>}</section>;
 }
 
 function OrderBlock({ order, busy, change }: { order: SessionOrder; busy: boolean; change: (operation: () => Promise<unknown>) => Promise<void> }) {

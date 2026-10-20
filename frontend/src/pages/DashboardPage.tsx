@@ -3,6 +3,7 @@ import { Archive, ChartBar, CurrencyCircleDollar, Package, Receipt, TrendUp } fr
 import { useAuth } from "../auth/AuthContext";
 import { ErrorState, Loading, PageHeader, Panel } from "../components/ui";
 import { request } from "../lib/api";
+import { normalizeRevenueSummary, type RevenueSummaryResponse } from "../lib/reporting";
 import type { DailyRevenueReport, Ingredient, Order, Page, Product, RevenueSummary, TopProductsReport } from "../types";
 import { money } from "../types";
 
@@ -37,11 +38,15 @@ function RevenueDashboard() {
     const query = new URLSearchParams({ date_from: from, date_to: to, timezone: "Asia/Ho_Chi_Minh" });
     try {
       const [summary, daily, top] = await Promise.all([
-        request<RevenueSummary>(`/reports/revenue/summary?${query}`),
+        request<RevenueSummaryResponse>(`/reports/revenue/summary?${query}`),
         request<DailyRevenueReport>(`/reports/revenue/daily?${query}`),
         request<TopProductsReport>(`/reports/top-products?${query}&limit=8`),
       ]);
-      setData({ summary, daily, top });
+      setData({
+        summary: normalizeRevenueSummary(summary),
+        daily,
+        top,
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không tải được báo cáo");
     } finally {

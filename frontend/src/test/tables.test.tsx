@@ -68,5 +68,5 @@ it("selects a product safely and shows the final size price", async () => {
   await user.selectOptions(await screen.findByLabelText("Chọn sản phẩm"), "1");
 
   expect(screen.getByRole("option", { name: /M · 30\.000/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Thêm · 25\.000/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /Thêm · 30\.000/ })).toBeEnabled();
 });

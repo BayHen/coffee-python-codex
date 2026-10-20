@@ -36,6 +36,7 @@ export function ProductsPage() {
         items: Array.isArray(p.items)
           ? p.items.map((product) => ({
               ...product,
+              base_price: requirePrice(product.base_price, product.name),
               variants: Array.isArray(product.variants) ? product.variants : [],
               toppings: Array.isArray(product.toppings) ? product.toppings : [],
             }))
@@ -59,6 +60,13 @@ export function ProductsPage() {
     </Panel>)}</div>}
     {editor && <EditorDialog editor={editor} categories={categories?.items ?? []} close={() => setEditor(null)} saved={async () => { setEditor(null); await load(); }} />}
   </>;
+}
+
+function requirePrice(value: string | undefined, productName: string): string {
+  if (value == null || value.trim() === "" || !Number.isFinite(Number(value))) {
+    throw new Error(`API thiếu giá cơ bản hợp lệ cho sản phẩm ${productName}`);
+  }
+  return value;
 }
 
 function OptionList({ title, add, children }: { title: string; add: () => void; children: ReactNode }) {

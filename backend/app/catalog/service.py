@@ -130,6 +130,16 @@ class CatalogService:
                 self.repository.add_product(product)
                 self.db.flush()
                 product_id = product.id
+                self.repository.add_variant(
+                    ProductVariant(
+                        product_id=product_id,
+                        sku=f"AUTO-{product_id}",
+                        name="Standard",
+                        price=0,
+                        is_active=True,
+                    )
+                )
+                self.db.flush()
             return self.get_product(product_id)
         except IntegrityError as exc:
             raise api_error(
@@ -184,6 +194,7 @@ class CatalogService:
             with self.db.begin():
                 if self.repository.get_product(product_id) is None:
                     raise api_error(404, "product_not_found", "Product not found")
+                self.repository.remove_unused_automatic_variant(product_id)
                 variant = ProductVariant(product_id=product_id, **payload.model_dump())
                 self.repository.add_variant(variant)
                 self.db.flush()
