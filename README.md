@@ -144,6 +144,30 @@ và [docs/ai-management-assistant.md](docs/ai-management-assistant.md).
 
 `.env.example` là mẫu cấu hình. Nếu cần, sao chép thành `.env` và thay placeholder trên máy cá nhân. Lệnh `npm.cmd run dev:api` nạp `.env` cho môi trường development; các cách chạy backend khác cần nhận `DATABASE_URL` và `JWT_SECRET_KEY` từ process. `.env` đã nằm trong `.gitignore`.
 
+## Chạy bằng Docker
+
+Yêu cầu Docker Desktop với Compose v2. Tạo file cấu hình riêng và thay toàn bộ
+placeholder bằng giá trị ngẫu nhiên; file `.env.docker` không được commit:
+
+```powershell
+Copy-Item docker.env.example .env.docker
+docker compose --env-file .env.docker config --quiet
+docker compose --env-file .env.docker build
+docker compose --env-file .env.docker up -d
+docker compose --env-file .env.docker ps
+```
+
+Mở UI tại `http://localhost:8080`, API health tại
+`http://127.0.0.1:8000/health`. Dừng stack nhưng giữ nguyên dữ liệu PostgreSQL:
+
+```powershell
+docker compose --env-file .env.docker down
+```
+
+Không dùng `down -v` nếu chưa chủ động phê duyệt xóa volume. Migration chạy qua service
+one-shot `migrate` trước backend. Hướng dẫn demo seed, backup/restore, production,
+rollback và checklist nằm trong [docs/deployment.md](docs/deployment.md).
+
 ## Git và GitHub
 
 Repository đã có Git và remote `origin`. Kiểm tra địa chỉ trước khi dùng:

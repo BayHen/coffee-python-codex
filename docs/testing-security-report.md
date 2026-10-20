@@ -105,18 +105,22 @@ npm.cmd run build
 npm.cmd audit --omit=dev
 ```
 
-Verified result: 69 backend tests passed; 5 frontend tests passed; Ruff, formatting, Bandit, ESLint, TypeScript, Vite build, and npm production dependency audit passed.
+Verified result: 71 backend tests passed; 5 frontend tests passed; Ruff, formatting, Bandit, ESLint, TypeScript, Vite build, and npm production dependency audit passed.
 
 ## Pre-deployment checklist
 
-- [ ] Create a fresh virtual environment and upgrade `pip` to 26.2.1 or later.
-- [ ] Install from reviewed pinned dependencies and repeat dependency audits.
+- [x] Create a fresh virtual environment and upgrade `pip` to 26.2.1 or later.
+- [x] Install from reviewed pinned dependencies and repeat dependency audits.
 - [ ] Set strong `JWT_SECRET_KEY`, `DATABASE_URL`, and server-only `OPENAI_API_KEY` in a secrets manager.
 - [ ] Set exact production `CORS_ALLOWED_ORIGINS`; never use a wildcard.
 - [ ] Configure HTTPS, trusted proxy/host policy, HSTS, request size limits, and centralized rate limits.
 - [ ] Run Alembic against a staging backup and verify the current revision.
-- [ ] Run the complete backend suite against an isolated migrated `_test` database.
-- [ ] Run frontend tests, lint, and production build.
+- [x] Run the complete backend suite against an isolated migrated `_test` database.
+- [x] Run frontend tests, lint, and production build.
 - [ ] Run a controlled OpenAI staging smoke test and confirm budget/token limits.
-- [ ] Review Staff access to customer contact data.
-- [ ] Test backup restoration, monitoring, alerting, and rollback.
+- [x] Review Staff access to customer contact data. Staff currently receives phone/email to support POS lookup; production approval of this policy is still required.
+- [x] Test backup restoration into an isolated database and verify its Alembic revision.
+- [ ] Verify production monitoring and alert delivery.
+- [ ] Exercise the rollback plan in staging.
+
+Local verification on 2026-10-20 used pinned lockfiles, produced 71 passing backend tests against PostgreSQL, 5 passing frontend tests, clean Ruff/format/ESLint/build results, zero findings from `pip-audit`, and zero production findings from `npm audit`. The restored database reported Alembic revision `b9d1e3f5a7c2` and 17 public tables.
