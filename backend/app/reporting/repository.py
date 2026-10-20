@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Order, OrderItem, Payment
@@ -19,23 +19,35 @@ class ReportingRepository:
     ) -> tuple[object, ...]:
         return (
             Payment.status == "succeeded",
-            Order.status != "cancelled",
             Payment.created_at >= start_utc,
             Payment.created_at < end_utc,
         )
 
     def revenue_summary(
         self, start_utc: datetime, end_utc: datetime
-    ) -> tuple[Decimal, int]:
+    ) -> tuple[Decimal, int, Decimal, Decimal, int]:
         row = self.db.execute(
             select(
                 func.coalesce(func.sum(Payment.amount), Decimal("0.00")),
-                func.count(func.distinct(Payment.order_id)),
-            )
-            .join(Order, Order.id == Payment.order_id)
-            .where(*self._valid_payment_filters(start_utc, end_utc))
+                func.count(Payment.id),
+                func.coalesce(
+                    func.sum(Payment.amount).filter(Payment.method == "cash"),
+                    Decimal("0.00"),
+                ),
+                func.coalesce(
+                    func.sum(Payment.amount).filter(Payment.method == "bank_transfer"),
+                    Decimal("0.00"),
+                ),
+                func.count(Payment.id).filter(Payment.session_id.is_not(None)),
+            ).where(*self._valid_payment_filters(start_utc, end_utc))
         ).one()
-        return Decimal(row[0]), int(row[1])
+        return (
+            Decimal(row[0]),
+            int(row[1]),
+            Decimal(row[2]),
+            Decimal(row[3]),
+            int(row[4]),
+        )
 
     def refunded_summary(
         self, start_utc: datetime, end_utc: datetime
@@ -60,9 +72,8 @@ class ReportingRepository:
             select(
                 local_date.label("local_date"),
                 func.sum(Payment.amount).label("revenue"),
-                func.count(func.distinct(Payment.order_id)).label("order_count"),
+                func.count(Payment.id).label("order_count"),
             )
-            .join(Order, Order.id == Payment.order_id)
             .where(*self._valid_payment_filters(start_utc, end_utc))
             .group_by(local_date)
             .order_by(local_date)
@@ -83,8 +94,17 @@ class ReportingRepository:
                 func.sum(OrderItem.line_total).label("gross_item_sales"),
             )
             .join(Order, Order.id == OrderItem.order_id)
-            .join(Payment, Payment.order_id == Order.id)
-            .where(*self._valid_payment_filters(start_utc, end_utc))
+            .join(
+                Payment,
+                or_(
+                    Payment.order_id == Order.id,
+                    Payment.session_id == Order.session_id,
+                ),
+            )
+            .where(
+                *self._valid_payment_filters(start_utc, end_utc),
+                Order.status != "cancelled",
+            )
             .group_by(
                 OrderItem.product_name,
                 OrderItem.variant_name,

@@ -237,6 +237,10 @@ def test_reports_reconcile_revenue_days_and_top_products(
         "average_order_value": "72.50",
         "refunded_amount": "70.00",
         "refunded_payment_count": 1,
+        "cash_revenue": "145.00",
+        "bank_transfer_revenue": "0.00",
+        "paid_session_count": 0,
+        "revenue_by_method": {"cash": "145.00", "bank_transfer": "0.00"},
     }
 
     daily = client.get("/reports/revenue/daily", headers=headers, params=params)

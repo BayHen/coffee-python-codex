@@ -15,6 +15,10 @@ class RevenueSummary(BaseModel):
     average_order_value: Decimal = Field(decimal_places=2)
     refunded_amount: Decimal = Field(decimal_places=2)
     refunded_payment_count: int
+    cash_revenue: Decimal = Field(decimal_places=2)
+    bank_transfer_revenue: Decimal = Field(decimal_places=2)
+    paid_session_count: int
+    revenue_by_method: dict[str, Decimal]
 
 
 class DailyRevenuePoint(BaseModel):

@@ -105,6 +105,7 @@ class VariantView(BaseModel):
 class ProductCreate(BaseModel):
     category_id: int = Field(gt=0)
     name: Name
+    base_price: Money = Decimal("0.00")
     is_active: bool = True
 
     @field_validator("name", mode="before")
@@ -116,6 +117,7 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     category_id: Annotated[int | None, Field(gt=0)] = None
     name: Name | None = None
+    base_price: Money | None = None
     is_active: bool | None = None
 
     @field_validator("name", mode="before")
@@ -138,9 +140,46 @@ class ProductView(BaseModel):
     id: int
     category_id: int
     name: str
+    base_price: Decimal
     is_active: bool
     category: CategoryView
     variants: list[VariantView]
+    toppings: list["ToppingView"]
+
+
+class ToppingCreate(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    price: Money
+    is_active: bool = True
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        return normalize_text(value)
+
+
+class ToppingUpdate(BaseModel):
+    name: Annotated[str | None, Field(min_length=1, max_length=100)] = None
+    price: Money | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> "ToppingUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one field is required")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Updated fields cannot be null")
+        return self
+
+
+class ToppingView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_id: int
+    name: str
+    price: Decimal
+    is_active: bool
 
 
 class CategoryPage(BaseModel):

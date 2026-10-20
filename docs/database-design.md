@@ -1,5 +1,9 @@
 # Task 2 — Database design
 
+> Task 13 adds `cafe_tables`, `table_sessions`, session-linked orders, and consolidated
+> payments. See [table-order-management.md](table-order-management.md) for the current
+> ERD, partial unique constraints, and legacy-order compatibility strategy.
+
 ## Phạm vi và giả định MVP
 
 Quán quản lý nhân viên, khách hàng, menu theo biến thể (ví dụ size), đơn hàng, thanh toán, công thức pha chế và biến động nguyên liệu. Một `User` có một `Role`; `Employee` có thể gắn với một `User` để đăng nhập. Khách mua tại quầy có thể không có hồ sơ nên `Orders.customer_id` được phép null. Nhân viên tạo đơn cũng tùy chọn để sau này hỗ trợ kênh tự phục vụ. Một đơn MVP có tối đa một lần thanh toán **thành công**; những lần thử thất bại hoặc pending vẫn được ghi lại. Chưa hỗ trợ thanh toán từng phần.

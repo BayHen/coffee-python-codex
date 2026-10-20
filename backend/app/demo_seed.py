@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.security import hash_password
 from app.db.models import (
+    CafeTable,
     Category,
     Ingredient,
     InventoryTransaction,
@@ -47,6 +48,13 @@ def seed(db: Session, password: str) -> None:
         db.add(user)
         db.flush()
 
+    for number in ("01", "02", "03", "04", "05", "06"):
+        if (
+            db.scalar(select(CafeTable.id).where(CafeTable.table_number == number))
+            is None
+        ):
+            db.add(CafeTable(table_number=number, name=f"Demo Table {number}"))
+
     category = db.scalar(
         select(Category).where(func.lower(Category.name) == "demo coffee")
     )
@@ -62,14 +70,18 @@ def seed(db: Session, password: str) -> None:
         )
     )
     if product is None:
-        product = Product(category_id=category.id, name="Demo Latte")
+        product = Product(
+            category_id=category.id,
+            name="Demo Latte",
+            base_price=Decimal("35000.00"),
+        )
         db.add(product)
         db.flush()
 
     for sku, name, price in (
-        ("DEMO-LATTE-S", "Size S", Decimal("35000.00")),
-        ("DEMO-LATTE-M", "Size M", Decimal("45000.00")),
-        ("DEMO-LATTE-L", "Size L", Decimal("55000.00")),
+        ("DEMO-LATTE-S", "Size S", Decimal("0.00")),
+        ("DEMO-LATTE-M", "Size M", Decimal("10000.00")),
+        ("DEMO-LATTE-L", "Size L", Decimal("20000.00")),
     ):
         if (
             db.scalar(select(ProductVariant.id).where(ProductVariant.sku == sku))

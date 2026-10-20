@@ -109,13 +109,20 @@ Index("uq_categories_name_lower", func.lower(Category.name), unique=True)
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        CheckConstraint("base_price >= 0", name="base_price_nonnegative"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), index=True)
     name: Mapped[str] = mapped_column(String(150))
+    base_price: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), server_default=text("0")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     category: Mapped[Category] = relationship(back_populates="products")
     variants: Mapped[list[ProductVariant]] = relationship(back_populates="product")
+    toppings: Mapped[list[ProductTopping]] = relationship(back_populates="product")
 
 
 Index(
@@ -144,6 +151,21 @@ class ProductVariant(Base):
     order_items: Mapped[list[OrderItem]] = relationship(back_populates="variant")
 
 
+class ProductTopping(Base):
+    __tablename__ = "product_toppings"
+    __table_args__ = (
+        UniqueConstraint("product_id", "name"),
+        CheckConstraint("price >= 0", name="price_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    product: Mapped[Product] = relationship(back_populates="toppings")
+
+
 Index("uq_product_variants_sku_lower", func.lower(ProductVariant.sku), unique=True)
 Index(
     "uq_product_variants_product_name_lower",
@@ -151,6 +173,59 @@ Index(
     func.lower(ProductVariant.name),
     unique=True,
 )
+
+
+class CafeTable(Base):
+    __tablename__ = "cafe_tables"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    table_number: Mapped[str] = mapped_column(String(20), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    sessions: Mapped[list[TableSession]] = relationship(back_populates="table")
+
+
+Index("uq_cafe_tables_number_lower", func.lower(CafeTable.table_number), unique=True)
+
+
+class TableSession(Base):
+    __tablename__ = "table_sessions"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'paid', 'cancelled')", name="status_valid"),
+        Index(
+            "uq_table_sessions_open_table",
+            "table_id",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    table_id: Mapped[int] = mapped_column(ForeignKey("cafe_tables.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), server_default=text("'open'"))
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    opened_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    table: Mapped[CafeTable] = relationship(back_populates="sessions")
+    orders: Mapped[list[Order]] = relationship(
+        back_populates="table_session", order_by="Order.sequence_number"
+    )
+    payments: Mapped[list[Payment]] = relationship(back_populates="table_session")
 
 
 class Order(Base):
@@ -168,8 +243,19 @@ class Order(Base):
             name="total_components_valid",
         ),
         CheckConstraint(
-            "status IN ('draft', 'placed', 'paid', 'cancelled')",
+            "status IN ('draft', 'confirmed', 'placed', 'paid', 'cancelled')",
             name="status_valid",
+        ),
+        CheckConstraint(
+            "order_type IS NULL OR order_type IN ('initial', 'additional')",
+            name="order_type_valid",
+        ),
+        UniqueConstraint("session_id", "sequence_number"),
+        Index(
+            "uq_orders_session_additional_draft",
+            "session_id",
+            unique=True,
+            postgresql_where=text("status = 'draft' AND order_type = 'additional'"),
         ),
     )
 
@@ -180,6 +266,14 @@ class Order(Base):
     employee_id: Mapped[int | None] = mapped_column(
         ForeignKey("employees.id"), index=True
     )
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("table_sessions.id"), index=True
+    )
+    order_type: Mapped[str | None] = mapped_column(String(20))
+    sequence_number: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
     request_fingerprint: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), server_default=text("'draft'"))
@@ -196,6 +290,7 @@ class Order(Base):
     )
     customer: Mapped[Customer | None] = relationship(back_populates="orders")
     employee: Mapped[Employee | None] = relationship(back_populates="orders")
+    table_session: Mapped[TableSession | None] = relationship(back_populates="orders")
     items: Mapped[list[OrderItem]] = relationship(
         back_populates="order", order_by="OrderItem.id"
     )
@@ -235,18 +330,33 @@ class OrderItem(Base):
     inventory_transactions: Mapped[list[InventoryTransaction]] = relationship(
         back_populates="order_item"
     )
+    topping_snapshots: Mapped[list[OrderItemTopping]] = relationship(
+        back_populates="order_item", order_by="OrderItemTopping.id"
+    )
+
+
+class OrderItemTopping(Base):
+    __tablename__ = "order_item_toppings"
+    __table_args__ = (CheckConstraint("price >= 0", name="price_nonnegative"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_item_id: Mapped[int] = mapped_column(ForeignKey("order_items.id"), index=True)
+    topping_id: Mapped[int | None] = mapped_column(ForeignKey("product_toppings.id"))
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    order_item: Mapped[OrderItem] = relationship(back_populates="topping_snapshots")
 
 
 class OrderEvent(Base):
     __tablename__ = "order_events"
     __table_args__ = (
         CheckConstraint(
-            "to_status IN ('draft', 'placed', 'paid', 'cancelled')",
+            "to_status IN ('draft', 'confirmed', 'placed', 'paid', 'cancelled')",
             name="to_status_valid",
         ),
         CheckConstraint(
             "from_status IS NULL OR "
-            "from_status IN ('draft', 'placed', 'paid', 'cancelled')",
+            "from_status IN ('draft', 'confirmed', 'placed', 'paid', 'cancelled')",
             name="from_status_valid",
         ),
     )
@@ -270,6 +380,11 @@ class Payment(Base):
     __table_args__ = (
         CheckConstraint("amount > 0", name="amount_positive"),
         CheckConstraint(
+            "cash_received IS NULL OR "
+            "(cash_received >= amount AND change_amount = cash_received - amount)",
+            name="cash_values_valid",
+        ),
+        CheckConstraint(
             "status IN ('pending', 'succeeded', 'failed', 'refunded')",
             name="status_valid",
         ),
@@ -280,6 +395,12 @@ class Payment(Base):
             postgresql_where=text("status = 'succeeded'"),
         ),
         Index(
+            "uq_payments_succeeded_session",
+            "session_id",
+            unique=True,
+            postgresql_where=text("status = 'succeeded' AND session_id IS NOT NULL"),
+        ),
+        Index(
             "ix_payments_reporting_status_created_order",
             "status",
             "created_at",
@@ -288,17 +409,29 @@ class Payment(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), index=True)
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("table_sessions.id"), index=True
+    )
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
     request_fingerprint: Mapped[str] = mapped_column(String(64))
     provider_reference: Mapped[str | None] = mapped_column(String(128), unique=True)
+    receipt_number: Mapped[str | None] = mapped_column(String(40), unique=True)
+    cashier_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    cash_received: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    change_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    transfer_reference: Mapped[str | None] = mapped_column(String(128))
     method: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(20), server_default=text("'pending'"))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    order: Mapped[Order] = relationship(back_populates="payments")
+    order: Mapped[Order | None] = relationship(back_populates="payments")
+    table_session: Mapped[TableSession | None] = relationship(back_populates="payments")
 
 
 class LoyaltyTransaction(Base):

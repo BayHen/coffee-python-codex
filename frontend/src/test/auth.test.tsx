@@ -14,7 +14,7 @@ describe("authentication workflow", () => {
       const url = String(input);
       if (url.endsWith("/auth/login")) return json({ access_token: "access", refresh_token: "refresh", token_type: "bearer", expires_in: 900 });
       if (url.endsWith("/auth/me")) return json({ id: 1, email: "manager@example.com", role: "Manager", is_active: true });
-      if (url.includes("/reports/revenue/summary")) return json({ date_from: "2026-10-01", date_to: "2026-10-20", timezone: "Asia/Ho_Chi_Minh", total_revenue: "145.00", valid_order_count: 2, average_order_value: "72.50", refunded_amount: "0.00", refunded_payment_count: 0 });
+      if (url.includes("/reports/revenue/summary")) return json({ date_from: "2026-10-01", date_to: "2026-10-20", timezone: "Asia/Ho_Chi_Minh", total_revenue: "145.00", valid_order_count: 2, average_order_value: "72.50", refunded_amount: "0.00", refunded_payment_count: 0, cash_revenue: "145.00", bank_transfer_revenue: "0.00", paid_session_count: 0, revenue_by_method: { cash: "145.00", bank_transfer: "0.00" } });
       if (url.includes("/reports/revenue/daily")) return json({ date_from: "2026-10-01", date_to: "2026-10-20", timezone: "Asia/Ho_Chi_Minh", items: [{ date: "2026-10-20", revenue: "145.00", order_count: 2 }] });
       if (url.includes("/reports/top-products")) return json({ date_from: "2026-10-01", date_to: "2026-10-20", timezone: "Asia/Ho_Chi_Minh", items: [{ product_name: "Latte", variant_name: "M", sku: "LATTE-M", quantity_sold: 3, gross_item_sales: "145.00" }] });
       if (url.endsWith("/ai/chat")) return json({ answer: "Doanh thu là 145.00 VND.", highlights: ["2 đơn hợp lệ"], recommendations: ["Theo dõi nguyên liệu tồn thấp"], tools_used: ["get_revenue_summary"], request_id: "request-1" });
