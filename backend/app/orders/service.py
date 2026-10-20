@@ -119,7 +119,7 @@ class OrderService:
                     f"Variant {variant.sku} is not available",
                 )
             quantity = requested[variant.id]
-            unit_price = variant.price.quantize(CENT)
+            unit_price = (variant.product.base_price + variant.price).quantize(CENT)
             line_total = (unit_price * quantity).quantize(CENT)
             subtotal += line_total
             items.append(

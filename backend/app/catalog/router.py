@@ -19,6 +19,9 @@ from app.catalog.schemas import (
     ProductUpdate,
     ProductView,
     SortDirection,
+    ToppingCreate,
+    ToppingUpdate,
+    ToppingView,
     VariantCreate,
     VariantUpdate,
     VariantView,
@@ -166,3 +169,30 @@ def deactivate_variant(
 ) -> Response:
     CatalogService(db).deactivate_variant(product_id, variant_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/products/{product_id}/toppings", response_model=list[ToppingView])
+def list_toppings(product_id: int, _principal: Reader, db: Db) -> list[ToppingView]:
+    return CatalogService(db).list_toppings(product_id)
+
+
+@router.post(
+    "/products/{product_id}/toppings", response_model=ToppingView, status_code=201
+)
+def create_topping(
+    product_id: int, payload: ToppingCreate, _principal: Writer, db: Db
+) -> ToppingView:
+    return CatalogService(db).create_topping(product_id, payload)
+
+
+@router.patch(
+    "/products/{product_id}/toppings/{topping_id}", response_model=ToppingView
+)
+def update_topping(
+    product_id: int,
+    topping_id: int,
+    payload: ToppingUpdate,
+    _principal: Writer,
+    db: Db,
+) -> ToppingView:
+    return CatalogService(db).update_topping(product_id, topping_id, payload)

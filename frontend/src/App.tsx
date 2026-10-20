@@ -4,7 +4,6 @@ import { AppLayout } from "./components/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductsPage } from "./pages/ProductsPage";
-import { PosPage } from "./pages/PosPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -26,7 +25,8 @@ export function App() {
     <Route element={<Protected />}>
       <Route index element={<DashboardPage />} />
       <Route path="products" element={<ProductsPage />} />
-      <Route path="pos" element={<PosPage />} />
+      <Route path="menu" element={<Navigate to="/products" replace />} />
+      <Route path="pos" element={<Navigate to="/orders" replace />} />
       <Route path="orders" element={<OrdersPage />} />
       <Route path="inventory" element={<InventoryPage />} />
       <Route path="assistant" element={<ManagementOnly />} />

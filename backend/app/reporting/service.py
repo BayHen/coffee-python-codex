@@ -78,8 +78,8 @@ class ReportingService:
         self.repository = ReportingRepository(db)
 
     def summary(self, period: ReportPeriod) -> RevenueSummary:
-        revenue, order_count = self.repository.revenue_summary(
-            period.start_utc, period.end_utc
+        revenue, order_count, cash_revenue, bank_revenue, session_count = (
+            self.repository.revenue_summary(period.start_utc, period.end_utc)
         )
         refunded_amount, refunded_count = self.repository.refunded_summary(
             period.start_utc, period.end_utc
@@ -98,6 +98,13 @@ class ReportingService:
             average_order_value=average,
             refunded_amount=refunded_amount.quantize(CENT),
             refunded_payment_count=refunded_count,
+            cash_revenue=cash_revenue.quantize(CENT),
+            bank_transfer_revenue=bank_revenue.quantize(CENT),
+            paid_session_count=session_count,
+            revenue_by_method={
+                "cash": cash_revenue.quantize(CENT),
+                "bank_transfer": bank_revenue.quantize(CENT),
+            },
         )
 
     def daily(self, period: ReportPeriod) -> DailyRevenueReport:

@@ -1,5 +1,8 @@
 # Frontend Architecture (Task 8)
 
+> Navigation now unifies product management and POS under `/menu`; `/orders` is the
+> table/session workflow. Legacy `/products` and `/pos` routes redirect to `/menu`.
+
 ## Kiến trúc
 
 Frontend là một Vite SPA dùng React, TypeScript, Tailwind CSS v4 và React Router. Mỗi page gọi API qua `src/lib/api.ts`; không chứa giá hoặc tổng tiền tự quyết định thay backend.

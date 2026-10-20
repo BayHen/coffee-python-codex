@@ -1,5 +1,8 @@
 # Task 5 â€” Order Management
 
+> Standalone order endpoints remain compatible. Dine-in initial/additional orders use
+> table sessions documented in [table-order-management.md](table-order-management.md).
+
 ## State machine
 
 ```mermaid

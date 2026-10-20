@@ -107,6 +107,18 @@ lịch sử sự kiện và thanh toán mô phỏng có idempotency. Xem
 [docs/order-management.md](docs/order-management.md) để biết state diagram, JSON mẫu,
 quy tắc transaction và kiểm thử concurrency.
 
+## Menu, bàn và gọi thêm món (Task 13)
+
+Frontend hợp nhất Menu/POS, trang đơn hàng hiển thị sơ đồ bàn, và backend hỗ trợ phiên
+phục vụ gồm initial order, nhiều additional order, hóa đơn chung và checkout idempotent.
+Xem [docs/table-order-management.md](docs/table-order-management.md) để biết ERD, API,
+quy tắc đồng thời và luồng kiểm thử thủ công.
+
+Task 13 V3 tách Products khỏi gọi món, hỗ trợ giá cơ bản/size/topping, receipt, CASH và
+BANK_TRANSFER qua VietQR. Cấu hình `PAYMENT_BANK_ID`, `PAYMENT_BANK_NAME`,
+`PAYMENT_BANK_ACCOUNT`, `PAYMENT_BANK_HOLDER` chỉ trong environment trước khi dùng
+chuyển khoản.
+
 ## Inventory Management (Task 6)
 
 Module inventory quản lý nguyên liệu, recipe, ledger nhập/xuất/điều chỉnh, cảnh báo

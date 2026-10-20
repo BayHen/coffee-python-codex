@@ -12,10 +12,12 @@ from app.catalog.schemas import (
     ProductCreate,
     ProductPage,
     ProductUpdate,
+    ToppingCreate,
+    ToppingUpdate,
     VariantCreate,
     VariantUpdate,
 )
-from app.db.models import Category, Product, ProductVariant
+from app.db.models import Category, Product, ProductTopping, ProductVariant
 
 
 def api_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -216,3 +218,38 @@ class CatalogService:
             if variant is None:
                 raise api_error(404, "variant_not_found", "Product variant not found")
             variant.is_active = False
+
+    def list_toppings(self, product_id: int) -> list[ProductTopping]:
+        self.get_product(product_id)
+        return self.repository.list_toppings(product_id)
+
+    def create_topping(self, product_id: int, payload: ToppingCreate) -> ProductTopping:
+        try:
+            with self.db.begin():
+                if self.repository.get_product(product_id) is None:
+                    raise api_error(404, "product_not_found", "Product not found")
+                topping = ProductTopping(product_id=product_id, **payload.model_dump())
+                self.db.add(topping)
+                self.db.flush()
+            return topping
+        except IntegrityError as exc:
+            raise api_error(
+                409, "topping_conflict", "Topping name already exists"
+            ) from exc
+
+    def update_topping(
+        self, product_id: int, topping_id: int, payload: ToppingUpdate
+    ) -> ProductTopping:
+        try:
+            with self.db.begin():
+                topping = self.repository.get_topping(product_id, topping_id, lock=True)
+                if topping is None:
+                    raise api_error(404, "topping_not_found", "Topping not found")
+                for field, value in payload.model_dump(exclude_unset=True).items():
+                    setattr(topping, field, value)
+                self.db.flush()
+            return topping
+        except IntegrityError as exc:
+            raise api_error(
+                409, "topping_conflict", "Topping name already exists"
+            ) from exc

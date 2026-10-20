@@ -13,6 +13,7 @@ from app.inventory.router import router as inventory_router
 from app.orders.router import router as orders_router
 from app.people.router import router as people_router
 from app.reporting.router import router as reporting_router
+from app.tables.router import router as tables_router
 
 
 def cors_origins() -> list[str]:
@@ -45,6 +46,7 @@ app.include_router(inventory_router)
 app.include_router(orders_router)
 app.include_router(people_router)
 app.include_router(reporting_router)
+app.include_router(tables_router)
 
 
 @app.middleware("http")
@@ -53,7 +55,9 @@ async def security_headers(request: Request, call_next) -> Response:
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
-    if request.url.path.startswith(("/auth", "/ai", "/reports")):
+    if request.url.path.startswith(
+        ("/auth", "/ai", "/reports", "/products", "/categories", "/tables")
+    ):
         response.headers["Cache-Control"] = "no-store"
     return response
 

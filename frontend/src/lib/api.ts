@@ -29,7 +29,12 @@ async function errorFrom(response: Response): Promise<ApiError> {
   const detail = body?.detail;
   if (typeof detail === "string") return new ApiError(response.status, detail);
   if (detail?.message) return new ApiError(response.status, detail.message, detail.code);
-  if (Array.isArray(detail)) return new ApiError(response.status, detail[0]?.msg ?? "Dữ liệu không hợp lệ");
+  if (Array.isArray(detail)) {
+    const issue = detail[0];
+    const field = Array.isArray(issue?.loc) ? issue.loc.slice(1).join(".") : "";
+    const message = issue?.msg ?? "Dữ liệu không hợp lệ";
+    return new ApiError(response.status, field ? `${field}: ${message}` : message, issue?.type);
+  }
   if (response.status >= 500) {
     return new ApiError(
       response.status,
@@ -45,7 +50,11 @@ export async function request<T>(path: string, init: RequestInit = {}, retry = t
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const token = session.getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    ...init,
+    headers,
+  });
   if (response.status === 401 && token && retry) {
     const pair = await session.refresh();
     if (pair) return request<T>(path, init, false);

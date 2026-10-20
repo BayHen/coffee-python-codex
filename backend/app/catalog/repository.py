@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Category, Product, ProductVariant
+from app.db.models import Category, Product, ProductTopping, ProductVariant
 
 
 class CatalogRepository:
@@ -55,7 +55,9 @@ class CatalogRepository:
 
     def product_statement(self) -> Select[tuple[Product]]:
         return select(Product).options(
-            selectinload(Product.category), selectinload(Product.variants)
+            selectinload(Product.category),
+            selectinload(Product.variants),
+            selectinload(Product.toppings),
         )
 
     def get_product(self, product_id: int, *, lock: bool = False) -> Product | None:
@@ -135,3 +137,23 @@ class CatalogRepository:
 
     def add_variant(self, variant: ProductVariant) -> None:
         self.db.add(variant)
+
+    def get_topping(
+        self, product_id: int, topping_id: int, *, lock: bool = False
+    ) -> ProductTopping | None:
+        statement = select(ProductTopping).where(
+            ProductTopping.id == topping_id,
+            ProductTopping.product_id == product_id,
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return self.db.scalar(statement)
+
+    def list_toppings(self, product_id: int) -> list[ProductTopping]:
+        return list(
+            self.db.scalars(
+                select(ProductTopping)
+                .where(ProductTopping.product_id == product_id)
+                .order_by(ProductTopping.id)
+            ).all()
+        )

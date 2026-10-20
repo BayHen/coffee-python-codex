@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router";
-import { Archive, Coffee, House, List, Package, Receipt, Robot, SignOut, X } from "@phosphor-icons/react";
+import { Archive, Coffee, House, List, Receipt, Robot, SignOut, X } from "@phosphor-icons/react";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "./ui";
 
 const nav: Array<{ to: string; label: string; icon: typeof House; end?: boolean; management?: boolean }> = [
   { to: "/", label: "Tổng quan", icon: House, end: true },
-  { to: "/products", label: "Sản phẩm", icon: Package },
-  { to: "/pos", label: "Bán hàng", icon: Coffee },
+  { to: "/products", label: "Products", icon: Coffee },
   { to: "/orders", label: "Đơn hàng", icon: Receipt },
   { to: "/inventory", label: "Kho", icon: Archive },
   { to: "/assistant", label: "Trợ lý AI", icon: Robot, management: true },

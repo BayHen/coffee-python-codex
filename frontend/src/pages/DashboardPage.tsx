@@ -64,9 +64,9 @@ function RevenueDashboard() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { Icon: CurrencyCircleDollar, label: "Doanh thu", value: money(data.summary.total_revenue), note: "Thanh toán thành công" },
-          { Icon: Receipt, label: "Đơn hợp lệ", value: data.summary.valid_order_count, note: "Đơn đã thu tiền" },
-          { Icon: TrendUp, label: "Giá trị trung bình", value: money(data.summary.average_order_value), note: "Trên mỗi đơn hợp lệ" },
-          { Icon: Archive, label: "Đã hoàn tiền", value: money(data.summary.refunded_amount), note: `${data.summary.refunded_payment_count} giao dịch` },
+          { Icon: Receipt, label: "Phiên đã thanh toán", value: data.summary.paid_session_count, note: `${data.summary.valid_order_count} giao dịch thành công` },
+          { Icon: TrendUp, label: "Tiền mặt", value: money(data.summary.cash_revenue), note: "Doanh thu CASH" },
+          { Icon: Archive, label: "Chuyển khoản", value: money(data.summary.bank_transfer_revenue), note: "Doanh thu BANK TRANSFER" },
         ].map(({ Icon, label, value, note }) => <Panel key={label} className="p-5"><div className="mb-5 flex items-center justify-between text-stone-500"><span className="text-sm font-bold">{label}</span><Icon size={21} /></div><strong className="font-serif text-3xl">{value}</strong><p className="mt-1 text-sm text-stone-500">{note}</p></Panel>)}
       </section>
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_.55fr]">
