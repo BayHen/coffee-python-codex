@@ -19,6 +19,17 @@ export type Page<T> = {
   pages: number;
 };
 export type Category = { id: number; name: string };
+export type CategoryDeletionOptions = {
+  category: Category;
+  linked_product_count: number;
+  replacement_categories: Category[];
+  preferred_replacement_category_id: number | null;
+};
+export type CategoryReassignDeleteResult = {
+  deleted_category_id: number;
+  replacement_category_id: number;
+  reassigned_product_count: number;
+};
 export type Variant = {
   id: number;
   product_id: number;

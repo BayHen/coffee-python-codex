@@ -3,7 +3,9 @@
 import os
 import secrets
 from collections.abc import Iterator
+from datetime import date
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -214,3 +216,213 @@ def test_catalog_validation_conflicts_and_rbac(catalog_setup: dict[str, Any]) ->
     )
     assert bad_range.status_code == 422
     assert bad_range.json()["detail"]["code"] == "invalid_price_range"
+
+
+def test_category_reassignment_preserves_products_and_options(
+    catalog_setup: dict[str, Any],
+) -> None:
+    client: TestClient = catalog_setup["client"]
+    manager = auth_headers(client, "Manager", catalog_setup["password"])
+    staff = auth_headers(client, "Staff", catalog_setup["password"])
+
+    cafe = client.post("/categories", headers=manager, json={"name": "Cafe"}).json()
+    tea = client.post("/categories", headers=manager, json={"name": "Trà"}).json()
+    other = client.post("/categories", headers=manager, json={"name": "Nước ép"}).json()
+    product = client.post(
+        "/products",
+        headers=manager,
+        json={
+            "category_id": cafe["id"],
+            "name": "Cafe muối",
+            "base_price": "32000.00",
+        },
+    ).json()
+    variant = client.post(
+        f"/products/{product['id']}/variants",
+        headers=manager,
+        json={"sku": "CAFE-MUOI-M", "name": "M", "price": "5000.00"},
+    ).json()
+    topping = client.post(
+        f"/products/{product['id']}/toppings",
+        headers=manager,
+        json={"name": "Kem mặn", "price": "7000.00"},
+    ).json()
+    order_headers = dict(manager, **{"Idempotency-Key": f"order-{uuid4().hex}"})
+    order_response = client.post(
+        "/orders",
+        headers=order_headers,
+        json={"items": [{"variant_id": variant["id"], "quantity": 1}]},
+    )
+    assert order_response.status_code == 201, order_response.text
+    order = order_response.json()
+    placed = client.post(
+        f"/orders/{order['id']}/transitions",
+        headers=manager,
+        json={"target_status": "placed"},
+    )
+    assert placed.status_code == 200, placed.text
+    payment_headers = dict(manager, **{"Idempotency-Key": f"payment-{uuid4().hex}"})
+    payment = client.post(
+        f"/orders/{order['id']}/payments",
+        headers=payment_headers,
+        json={"method": "cash", "outcome": "succeeded"},
+    )
+    assert payment.status_code == 201, payment.text
+    order_before = client.get(f"/orders/{order['id']}", headers=manager).json()
+    today = date.today().isoformat()
+    revenue_before = client.get(
+        "/reports/revenue/summary",
+        headers=manager,
+        params={"date_from": today, "date_to": today},
+    ).json()
+
+    direct_delete = client.delete(f"/categories/{cafe['id']}", headers=manager)
+    assert direct_delete.status_code == 409
+
+    options = client.get(f"/categories/{cafe['id']}/deletion-options", headers=manager)
+    assert options.status_code == 200, options.text
+    assert options.json()["linked_product_count"] == 1
+    assert options.json()["preferred_replacement_category_id"] == tea["id"]
+    assert {item["id"] for item in options.json()["replacement_categories"]} == {
+        tea["id"],
+        other["id"],
+    }
+
+    assert (
+        client.post(
+            f"/categories/{cafe['id']}/reassign-and-delete",
+            headers=staff,
+            json={"replacement_category_id": tea["id"]},
+        ).status_code
+        == 403
+    )
+    same_category = client.post(
+        f"/categories/{cafe['id']}/reassign-and-delete",
+        headers=manager,
+        json={"replacement_category_id": cafe["id"]},
+    )
+    assert same_category.status_code == 422
+    missing_category = client.post(
+        f"/categories/{cafe['id']}/reassign-and-delete",
+        headers=manager,
+        json={"replacement_category_id": 999999999},
+    )
+    assert missing_category.status_code == 404
+
+    reassigned = client.post(
+        f"/categories/{cafe['id']}/reassign-and-delete",
+        headers=manager,
+        json={"replacement_category_id": other["id"]},
+    )
+    assert reassigned.status_code == 200, reassigned.text
+    assert reassigned.json() == {
+        "deleted_category_id": cafe["id"],
+        "replacement_category_id": other["id"],
+        "reassigned_product_count": 1,
+    }
+    assert client.get(f"/categories/{cafe['id']}", headers=manager).status_code == 404
+    saved_product = client.get(f"/products/{product['id']}", headers=manager).json()
+    assert saved_product["id"] == product["id"]
+    assert saved_product["category_id"] == other["id"]
+    assert saved_product["base_price"] == "32000.00"
+    assert {item["id"] for item in saved_product["variants"]} == {variant["id"]}
+    assert {item["id"] for item in saved_product["toppings"]} == {topping["id"]}
+    order_after = client.get(f"/orders/{order['id']}", headers=manager).json()
+    revenue_after = client.get(
+        "/reports/revenue/summary",
+        headers=manager,
+        params={"date_from": today, "date_to": today},
+    ).json()
+    assert order_after == order_before
+    assert order_after["payments"] == [payment.json()]
+    assert revenue_after == revenue_before
+
+
+def test_category_reassignment_conflict_rolls_back(
+    catalog_setup: dict[str, Any],
+) -> None:
+    client: TestClient = catalog_setup["client"]
+    manager = auth_headers(client, "Manager", catalog_setup["password"])
+    source = client.post("/categories", headers=manager, json={"name": "Source"}).json()
+    replacement = client.post(
+        "/categories", headers=manager, json={"name": "Replacement"}
+    ).json()
+    source_product = client.post(
+        "/products",
+        headers=manager,
+        json={"category_id": source["id"], "name": "Duplicate"},
+    ).json()
+    client.post(
+        "/products",
+        headers=manager,
+        json={"category_id": replacement["id"], "name": "Duplicate"},
+    )
+
+    response = client.post(
+        f"/categories/{source['id']}/reassign-and-delete",
+        headers=manager,
+        json={"replacement_category_id": replacement["id"]},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "category_reassignment_conflict"
+    assert client.get(f"/categories/{source['id']}", headers=manager).status_code == 200
+    saved_product = client.get(
+        f"/products/{source_product['id']}", headers=manager
+    ).json()
+    assert saved_product["category_id"] == source["id"]
+
+
+def test_deleting_tea_does_not_preselect_itself(
+    catalog_setup: dict[str, Any],
+) -> None:
+    client: TestClient = catalog_setup["client"]
+    manager = auth_headers(client, "Manager", catalog_setup["password"])
+    tea = client.post("/categories", headers=manager, json={"name": "Trà"}).json()
+    options = client.get(f"/categories/{tea['id']}/deletion-options", headers=manager)
+    assert options.status_code == 200
+    assert options.json()["preferred_replacement_category_id"] is None
+    assert all(
+        item["id"] != tea["id"] for item in options.json()["replacement_categories"]
+    )
+
+
+def test_missing_tea_requires_manual_valid_replacement(
+    catalog_setup: dict[str, Any],
+) -> None:
+    client: TestClient = catalog_setup["client"]
+    manager = auth_headers(client, "Manager", catalog_setup["password"])
+    source = client.post(
+        "/categories", headers=manager, json={"name": "Đồ uống nóng"}
+    ).json()
+    product = client.post(
+        "/products",
+        headers=manager,
+        json={"category_id": source["id"], "name": "Ca cao"},
+    ).json()
+
+    no_replacement = client.get(
+        f"/categories/{source['id']}/deletion-options", headers=manager
+    ).json()
+    assert no_replacement["replacement_categories"] == []
+    assert no_replacement["preferred_replacement_category_id"] is None
+    assert (
+        client.delete(f"/categories/{source['id']}", headers=manager).status_code == 409
+    )
+
+    other = client.post(
+        "/categories", headers=manager, json={"name": "Trà xanh"}
+    ).json()
+    manual_options = client.get(
+        f"/categories/{source['id']}/deletion-options", headers=manager
+    ).json()
+    assert manual_options["preferred_replacement_category_id"] is None
+    assert manual_options["replacement_categories"] == [other]
+
+    response = client.post(
+        f"/categories/{source['id']}/reassign-and-delete",
+        headers=manager,
+        json={"replacement_category_id": other["id"]},
+    )
+    assert response.status_code == 200, response.text
+    moved_product = client.get(f"/products/{product['id']}", headers=manager).json()
+    assert moved_product["category_id"] == other["id"]

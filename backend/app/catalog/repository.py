@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import Select, exists, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Category, OrderItem, Product, ProductTopping, ProductVariant
@@ -46,6 +46,42 @@ class CatalogRepository:
         return bool(
             self.db.scalar(select(exists().where(Product.category_id == category_id)))
         )
+
+    def count_category_products(self, category_id: int) -> int:
+        return (
+            self.db.scalar(
+                select(func.count(Product.id)).where(Product.category_id == category_id)
+            )
+            or 0
+        )
+
+    def list_replacement_categories(self, category_id: int) -> list[Category]:
+        return list(
+            self.db.scalars(
+                select(Category)
+                .where(Category.id != category_id)
+                .order_by(Category.name, Category.id)
+            ).all()
+        )
+
+    def lock_categories(self, category_ids: set[int]) -> dict[int, Category]:
+        categories = self.db.scalars(
+            select(Category)
+            .where(Category.id.in_(category_ids))
+            .order_by(Category.id)
+            .with_for_update()
+        ).all()
+        return {category.id: category for category in categories}
+
+    def reassign_products(
+        self, source_category_id: int, replacement_category_id: int
+    ) -> int:
+        result = self.db.execute(
+            update(Product)
+            .where(Product.category_id == source_category_id)
+            .values(category_id=replacement_category_id)
+        )
+        return result.rowcount or 0
 
     def add_category(self, category: Category) -> None:
         self.db.add(category)

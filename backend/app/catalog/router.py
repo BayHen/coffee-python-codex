@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import Principal, require_roles
 from app.catalog.schemas import (
     CategoryCreate,
+    CategoryDeletionOptions,
     CategoryPage,
+    CategoryReassignDelete,
+    CategoryReassignDeleteResult,
     CategorySort,
     CategoryUpdate,
     CategoryView,
@@ -77,6 +80,29 @@ def update_category(
 def delete_category(category_id: int, _principal: Writer, db: Db) -> Response:
     CatalogService(db).delete_category(category_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/categories/{category_id}/deletion-options",
+    response_model=CategoryDeletionOptions,
+)
+def get_category_deletion_options(
+    category_id: int, _principal: Writer, db: Db
+) -> CategoryDeletionOptions:
+    return CatalogService(db).get_category_deletion_options(category_id)
+
+
+@router.post(
+    "/categories/{category_id}/reassign-and-delete",
+    response_model=CategoryReassignDeleteResult,
+)
+def reassign_and_delete_category(
+    category_id: int,
+    payload: CategoryReassignDelete,
+    _principal: Writer,
+    db: Db,
+) -> CategoryReassignDeleteResult:
+    return CatalogService(db).reassign_and_delete_category(category_id, payload)
 
 
 @router.get("/products", response_model=ProductPage)

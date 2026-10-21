@@ -49,6 +49,23 @@ class CategoryView(BaseModel):
     name: str
 
 
+class CategoryReassignDelete(BaseModel):
+    replacement_category_id: int = Field(gt=0)
+
+
+class CategoryDeletionOptions(BaseModel):
+    category: CategoryView
+    linked_product_count: int
+    replacement_categories: list[CategoryView]
+    preferred_replacement_category_id: int | None
+
+
+class CategoryReassignDeleteResult(BaseModel):
+    deleted_category_id: int
+    replacement_category_id: int
+    reassigned_product_count: int
+
+
 class VariantCreate(BaseModel):
     sku: Sku
     name: Annotated[str, Field(min_length=1, max_length=100)]

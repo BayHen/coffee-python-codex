@@ -1,5 +1,7 @@
 """Catalog business rules and transaction boundaries."""
 
+import unicodedata
+
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,7 +9,10 @@ from sqlalchemy.orm import Session
 from app.catalog.repository import CatalogRepository
 from app.catalog.schemas import (
     CategoryCreate,
+    CategoryDeletionOptions,
     CategoryPage,
+    CategoryReassignDelete,
+    CategoryReassignDeleteResult,
     CategoryUpdate,
     ProductCreate,
     ProductPage,
@@ -16,6 +21,7 @@ from app.catalog.schemas import (
     ToppingUpdate,
     VariantCreate,
     VariantUpdate,
+    normalize_text,
 )
 from app.db.models import Category, Product, ProductTopping, ProductVariant
 
@@ -94,6 +100,76 @@ class CatalogService:
                     "Category with products cannot be deleted",
                 )
             self.repository.delete_category(category)
+
+    def get_category_deletion_options(
+        self, category_id: int
+    ) -> CategoryDeletionOptions:
+        category = self.repository.get_category(category_id)
+        if category is None:
+            raise api_error(404, "category_not_found", "Category not found")
+        replacements = self.repository.list_replacement_categories(category_id)
+        preferred = [
+            item
+            for item in replacements
+            if unicodedata.normalize("NFC", normalize_text(item.name)).casefold()
+            == "trà"
+        ]
+        return CategoryDeletionOptions(
+            category=category,
+            linked_product_count=self.repository.count_category_products(category_id),
+            replacement_categories=replacements,
+            preferred_replacement_category_id=(
+                preferred[0].id if len(preferred) == 1 else None
+            ),
+        )
+
+    def reassign_and_delete_category(
+        self, category_id: int, payload: CategoryReassignDelete
+    ) -> CategoryReassignDeleteResult:
+        replacement_category_id = payload.replacement_category_id
+        if replacement_category_id == category_id:
+            raise api_error(
+                422,
+                "replacement_category_must_differ",
+                "Replacement category must differ from deleted category",
+            )
+        try:
+            with self.db.begin():
+                categories = self.repository.lock_categories(
+                    {category_id, replacement_category_id}
+                )
+                category = categories.get(category_id)
+                if category is None:
+                    raise api_error(404, "category_not_found", "Category not found")
+                if replacement_category_id not in categories:
+                    raise api_error(
+                        404,
+                        "replacement_category_not_found",
+                        "Replacement category not found",
+                    )
+                reassigned_count = self.repository.reassign_products(
+                    category_id, replacement_category_id
+                )
+                self.db.flush()
+                if self.repository.category_has_products(category_id):
+                    raise api_error(
+                        409,
+                        "category_reassignment_incomplete",
+                        "Not all products could be reassigned",
+                    )
+                self.repository.delete_category(category)
+                self.db.flush()
+        except IntegrityError as exc:
+            raise api_error(
+                409,
+                "category_reassignment_conflict",
+                "Products conflict with the replacement category",
+            ) from exc
+        return CategoryReassignDeleteResult(
+            deleted_category_id=category_id,
+            replacement_category_id=replacement_category_id,
+            reassigned_product_count=reassigned_count,
+        )
 
     def list_products(self, **filters: object) -> ProductPage:
         page = int(filters.pop("page"))
