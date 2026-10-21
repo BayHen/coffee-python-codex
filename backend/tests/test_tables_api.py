@@ -3,6 +3,7 @@
 import os
 import secrets
 from collections.abc import Iterator
+from datetime import date
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -201,6 +202,7 @@ def test_initial_additional_bill_checkout_and_rbac(table_setup: dict[str, Any]) 
         json={"method": "cash", "cash_received": "100000.00"},
     )
     assert payment.status_code == 201, payment.text
+    assert payment.json()["status"] == "succeeded"
     assert payment.json()["amount"] == "70000.00"
     assert payment.json()["change_amount"] == "30000.00"
     assert payment.json()["receipt_number"].startswith("RCP-")
@@ -303,3 +305,133 @@ def test_add_item_uses_default_variant_and_validates_product(
         f"/tables/{table['id']}/active-session", headers=staff
     ).json()
     assert persisted["orders"][0]["items"][0]["line_total"] == "84000.00"
+
+
+def test_inactive_options_are_rejected_and_used_topping_history_is_preserved(
+    table_setup: dict[str, Any],
+) -> None:
+    client: TestClient = table_setup["client"]
+    manager = table_setup["tokens"]["Manager"]
+    staff = table_setup["tokens"]["Staff"]
+    product_id = table_setup["product_id"]
+    original_variant_id = table_setup["variant_id"]
+
+    backup = client.post(
+        f"/products/{product_id}/variants",
+        headers=manager,
+        json={"name": "Large", "price": "5000.00"},
+    ).json()
+    topping = client.post(
+        f"/products/{product_id}/toppings",
+        headers=manager,
+        json={"name": "Foam", "price": "3000.00"},
+    ).json()
+    original = client.get(
+        f"/products/{product_id}/variants/{original_variant_id}", headers=manager
+    ).json()
+    stopped = client.patch(
+        f"/products/{product_id}/variants/{original_variant_id}/status",
+        headers=manager,
+        json={"is_active": False},
+    )
+    assert stopped.status_code == 200
+    assert stopped.json()["sku"] == original["sku"]
+
+    table = client.post(
+        "/tables",
+        headers=manager,
+        json={"table_number": uuid4().hex[:8], "name": "Option lifecycle"},
+    ).json()
+    session = client.post(f"/tables/{table['id']}/sessions", headers=staff).json()
+    order_id = session["orders"][0]["id"]
+    inactive_size = client.post(
+        f"/orders/{order_id}/items",
+        headers=staff,
+        json={
+            "product_id": product_id,
+            "variant_id": original_variant_id,
+            "quantity": 1,
+        },
+    )
+    assert inactive_size.status_code == 409
+    assert inactive_size.json()["detail"]["code"] == "variant_unavailable"
+
+    client.patch(
+        f"/products/{product_id}/toppings/{topping['id']}/status",
+        headers=manager,
+        json={"is_active": False},
+    )
+    inactive_topping = client.post(
+        f"/orders/{order_id}/items",
+        headers=staff,
+        json={
+            "product_id": product_id,
+            "variant_id": backup["id"],
+            "topping_ids": [topping["id"]],
+            "quantity": 1,
+        },
+    )
+    assert inactive_topping.status_code == 409
+    assert inactive_topping.json()["detail"]["code"] == "topping_unavailable"
+
+    reactivated_size = client.patch(
+        f"/products/{product_id}/variants/{original_variant_id}/status",
+        headers=manager,
+        json={"is_active": True},
+    ).json()
+    reactivated_topping = client.patch(
+        f"/products/{product_id}/toppings/{topping['id']}/status",
+        headers=manager,
+        json={"is_active": True},
+    ).json()
+    assert reactivated_size["id"] == original_variant_id
+    assert reactivated_size["sku"] == original["sku"]
+    assert reactivated_topping["id"] == topping["id"]
+
+    added = client.post(
+        f"/orders/{order_id}/items",
+        headers=staff,
+        json={
+            "product_id": product_id,
+            "variant_id": original_variant_id,
+            "topping_ids": [topping["id"]],
+            "quantity": 1,
+        },
+    )
+    assert added.status_code == 201, added.text
+    assert client.post(f"/orders/{order_id}/confirm", headers=staff).status_code == 200
+    payment = client.post(
+        f"/sessions/{session['id']}/checkout",
+        headers={**staff, "Idempotency-Key": f"checkout-{uuid4().hex}"},
+        json={"method": "cash", "cash_received": "100000.00"},
+    )
+    assert payment.status_code == 201, payment.text
+    assert payment.json()["status"] == "succeeded"
+    history_before = client.get(f"/sessions/{session['id']}", headers=staff).json()
+    report_params = {
+        "date_from": date.today().isoformat(),
+        "date_to": date.today().isoformat(),
+    }
+    revenue_before = client.get(
+        "/reports/revenue/summary", headers=manager, params=report_params
+    ).json()
+
+    removed = client.delete(
+        f"/products/{product_id}/toppings/{topping['id']}", headers=manager
+    )
+    assert removed.status_code == 200
+    assert removed.json()["action"] == "deactivated"
+    history_after = client.get(f"/sessions/{session['id']}", headers=staff).json()
+    revenue_after = client.get(
+        "/reports/revenue/summary", headers=manager, params=report_params
+    ).json()
+    assert history_after == history_before
+    assert revenue_after == revenue_before
+
+    restored = client.patch(
+        f"/products/{product_id}/toppings/{topping['id']}/status",
+        headers=manager,
+        json={"is_active": True},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["id"] == topping["id"]

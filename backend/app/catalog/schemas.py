@@ -81,7 +81,6 @@ class VariantUpdate(BaseModel):
 
     name: Annotated[str | None, Field(min_length=1, max_length=100)] = None
     price: Money | None = None
-    is_active: bool | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -158,6 +157,8 @@ class ProductView(BaseModel):
 
 
 class ToppingCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Annotated[str, Field(min_length=1, max_length=100)]
     price: Money
     is_active: bool = True
@@ -169,9 +170,10 @@ class ToppingCreate(BaseModel):
 
 
 class ToppingUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Annotated[str | None, Field(min_length=1, max_length=100)] = None
     price: Money | None = None
-    is_active: bool | None = None
 
     @model_validator(mode="after")
     def require_change(self) -> "ToppingUpdate":
@@ -190,6 +192,19 @@ class ToppingView(BaseModel):
     name: str
     price: Decimal
     is_active: bool
+
+
+class OptionStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: bool
+
+
+class OptionRemovalResult(BaseModel):
+    entity_type: Literal["variant", "topping"]
+    entity_id: int
+    action: Literal["deleted", "deactivated"]
+    is_active: bool | None
 
 
 class CategoryPage(BaseModel):

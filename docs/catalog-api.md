@@ -51,6 +51,24 @@ HTTP 422 nếu client gửi trường `sku`, và trigger database ngăn thay đ�
 Sequence được khởi tạo sau mã `VAR-*` lớn nhất đang có và không dùng `COUNT` hay
 `MAX(id)`, vì vậy nhiều request đồng thời không nhận trùng mã.
 
+## Vòng đời Size và Topping
+
+- `PATCH /products/{id}/variants/{variant_id}/status`
+- `DELETE /products/{id}/variants/{variant_id}`
+- `PATCH /products/{id}/toppings/{topping_id}/status`
+- `DELETE /products/{id}/toppings/{topping_id}`
+
+Status endpoint nhận `{"is_active": true|false}`. Reactivate giữ nguyên ID, tên,
+giá và SKU. Không thể ngừng bán hoặc xóa size active cuối cùng của một product;
+hãy thêm hoặc kích hoạt size khác trước. Không thể reactivate lựa chọn khi product
+đang inactive.
+
+DELETE trả `action=deleted` khi lựa chọn chưa có dependency. Size có order item hoặc
+recipe, và topping đã xuất hiện trong order snapshot, được chuyển thành inactive và
+trả `action=deactivated`. Backend không cascade sang order, payment hay dữ liệu báo
+cáo. Request chỉnh sửa name/price không nhận `is_active`; thay đổi trạng thái phải đi
+qua status endpoint để áp dụng đầy đủ kiểm tra transaction và concurrency.
+
 Response lá»—i nghiá»‡p vá»¥ cÃ³ dáº¡ng:
 
 ```json

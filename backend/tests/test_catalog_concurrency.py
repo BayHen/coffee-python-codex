@@ -6,13 +6,18 @@ from threading import Event
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.catalog.repository import CatalogRepository
-from app.catalog.schemas import CategoryReassignDelete, VariantCreate
+from app.catalog.schemas import (
+    CategoryReassignDelete,
+    OptionStatusUpdate,
+    VariantCreate,
+)
 from app.catalog.service import CatalogService
 from app.db.models import Category, Product, ProductVariant
 from app.db.session import create_db_engine
@@ -171,6 +176,88 @@ def test_concurrent_variant_creation_uses_unique_generated_skus() -> None:
                 ).all()
             )
             assert persisted == set(skus)
+    finally:
+        if ids:
+            with Session(engine) as db, db.begin():
+                db.execute(
+                    delete(ProductVariant).where(
+                        ProductVariant.product_id == ids["product"]
+                    )
+                )
+                db.execute(delete(Product).where(Product.id == ids["product"]))
+                db.execute(delete(Category).where(Category.id == ids["category"]))
+        engine.dispose()
+
+
+def test_concurrent_deactivation_keeps_one_active_variant() -> None:
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("Set TEST_DATABASE_URL to a migrated PostgreSQL test DB")
+    if not (make_url(url).database or "").endswith("_test"):
+        pytest.fail("TEST_DATABASE_URL database name must end with _test")
+
+    suffix = uuid4().hex
+    engine = create_db_engine(url)
+    ids: dict[str, int] = {}
+    try:
+        with Session(engine) as db, db.begin():
+            category = Category(name=f"Status category {suffix}")
+            db.add(category)
+            db.flush()
+            product = Product(category_id=category.id, name=f"Status product {suffix}")
+            db.add(product)
+            db.flush()
+            variants = [
+                ProductVariant(
+                    product_id=product.id,
+                    sku=f"STATUS-{suffix}-M",
+                    name="M",
+                    price=0,
+                ),
+                ProductVariant(
+                    product_id=product.id,
+                    sku=f"STATUS-{suffix}-L",
+                    name="L",
+                    price=0,
+                ),
+            ]
+            db.add_all(variants)
+            db.flush()
+            ids.update(
+                category=category.id,
+                product=product.id,
+                first=variants[0].id,
+                second=variants[1].id,
+            )
+
+        def deactivate(variant_id: int) -> str:
+            with Session(engine, expire_on_commit=False) as db:
+                try:
+                    CatalogService(db).set_variant_status(
+                        ids["product"],
+                        variant_id,
+                        OptionStatusUpdate(is_active=False),
+                    )
+                    return "deactivated"
+                except HTTPException as exc:
+                    assert exc.status_code == 409
+                    assert exc.detail["code"] == "last_active_variant"
+                    return "rejected"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(deactivate, (ids["first"], ids["second"])))
+
+        assert sorted(results) == ["deactivated", "rejected"]
+        with Session(engine) as db:
+            assert (
+                db.scalar(
+                    select(func.count(ProductVariant.id)).where(
+                        ProductVariant.product_id == ids["product"],
+                        ProductVariant.is_active.is_(True),
+                    )
+                )
+                == 1
+            )
     finally:
         if ids:
             with Session(engine) as db, db.begin():

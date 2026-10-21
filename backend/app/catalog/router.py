@@ -16,6 +16,8 @@ from app.catalog.schemas import (
     CategorySort,
     CategoryUpdate,
     CategoryView,
+    OptionRemovalResult,
+    OptionStatusUpdate,
     ProductCreate,
     ProductPage,
     ProductSort,
@@ -189,12 +191,28 @@ def update_variant(
     return CatalogService(db).update_variant(product_id, variant_id, payload)
 
 
-@router.delete("/products/{product_id}/variants/{variant_id}", status_code=204)
-def deactivate_variant(
+@router.patch(
+    "/products/{product_id}/variants/{variant_id}/status",
+    response_model=VariantView,
+)
+def set_variant_status(
+    product_id: int,
+    variant_id: int,
+    payload: OptionStatusUpdate,
+    _principal: Writer,
+    db: Db,
+) -> VariantView:
+    return CatalogService(db).set_variant_status(product_id, variant_id, payload)
+
+
+@router.delete(
+    "/products/{product_id}/variants/{variant_id}",
+    response_model=OptionRemovalResult,
+)
+def remove_variant(
     product_id: int, variant_id: int, _principal: Writer, db: Db
-) -> Response:
-    CatalogService(db).deactivate_variant(product_id, variant_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+) -> OptionRemovalResult:
+    return CatalogService(db).remove_variant(product_id, variant_id)
 
 
 @router.get("/products/{product_id}/toppings", response_model=list[ToppingView])
@@ -222,3 +240,27 @@ def update_topping(
     db: Db,
 ) -> ToppingView:
     return CatalogService(db).update_topping(product_id, topping_id, payload)
+
+
+@router.patch(
+    "/products/{product_id}/toppings/{topping_id}/status",
+    response_model=ToppingView,
+)
+def set_topping_status(
+    product_id: int,
+    topping_id: int,
+    payload: OptionStatusUpdate,
+    _principal: Writer,
+    db: Db,
+) -> ToppingView:
+    return CatalogService(db).set_topping_status(product_id, topping_id, payload)
+
+
+@router.delete(
+    "/products/{product_id}/toppings/{topping_id}",
+    response_model=OptionRemovalResult,
+)
+def remove_topping(
+    product_id: int, topping_id: int, _principal: Writer, db: Db
+) -> OptionRemovalResult:
+    return CatalogService(db).remove_topping(product_id, topping_id)

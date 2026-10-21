@@ -6,10 +6,12 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ArrowCounterClockwise,
   MagnifyingGlass,
   PencilSimple,
   Plus,
   Power,
+  Trash,
 } from "@phosphor-icons/react";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -28,6 +30,8 @@ import type {
   CategoryReassignDeleteResult,
   CreateProductRequest,
   CreateVariantRequest,
+  OptionRemovalResult,
+  OptionStatus,
   Page,
   Product,
   Topping,
@@ -44,6 +48,15 @@ type Editor =
   | { kind: "topping"; product: Product; topping?: Topping }
   | null;
 
+type ManagedOption = Variant | Topping;
+type OptionAction = {
+  kind: "status" | "delete";
+  optionKind: "size" | "topping";
+  product: Product;
+  option: ManagedOption;
+  nextActive?: boolean;
+};
+
 export function ProductsPage() {
   const { canManage } = useAuth();
   const [products, setProducts] = useState<Page<Product> | null>(null);
@@ -53,6 +66,10 @@ export function ProductsPage() {
   const [editor, setEditor] = useState<Editor>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [optionStatus, setOptionStatus] = useState<OptionStatus>("all");
+  const [optionAction, setOptionAction] = useState<OptionAction | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
   const load = useCallback(
     async (categoryOverride?: string) => {
       setError("");
@@ -101,6 +118,48 @@ export function ProductsPage() {
       setError(reason instanceof Error ? reason.message : "Không thể cập nhật");
     }
   }
+  async function confirmOptionAction() {
+    if (!optionAction || actionBusy) return;
+    setActionBusy(true);
+    setError("");
+    setActionError("");
+    const optionPath = optionAction.optionKind === "size" ? "variants" : "toppings";
+    const path = `/products/${optionAction.product.id}/${optionPath}/${optionAction.option.id}`;
+    try {
+      if (optionAction.kind === "status") {
+        await request(path + "/status", {
+          method: "PATCH",
+          body: JSON.stringify({ is_active: optionAction.nextActive }),
+        });
+        setSuccess(
+          optionAction.nextActive
+            ? "Đã kích hoạt lại lựa chọn. ID và SKU được giữ nguyên."
+            : "Đã ngừng bán lựa chọn. Lịch sử đơn hàng được giữ nguyên.",
+        );
+      } else {
+        const result = await request<OptionRemovalResult>(path, {
+          method: "DELETE",
+        });
+        setSuccess(
+          result.action === "deleted"
+            ? "Đã xóa lựa chọn chưa từng được sử dụng."
+            : "Lựa chọn đã được sử dụng trong đơn hàng. Hệ thống đã ngừng bán thay vì xóa lịch sử.",
+        );
+      }
+      setOptionAction(null);
+      await load();
+    } catch (reason) {
+      const message = optionActionError(reason);
+      setActionError(message);
+      if (!(reason instanceof ApiError)) {
+        await load();
+        setOptionAction(null);
+        setError(`${message}. Danh sách đã được tải lại để xác minh trạng thái.`);
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
   return (
     <>
       <PageHeader
@@ -146,6 +205,30 @@ export function ProductsPage() {
           ))}
         </select>
       </Panel>
+      <div
+        className="mb-4 flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Lọc trạng thái size và topping"
+      >
+        <span className="mr-1 text-sm font-bold text-stone-600">Lựa chọn:</span>
+        {(["all", "active", "inactive"] as const).map((status) => (
+          <Button
+            key={status}
+            aria-pressed={optionStatus === status}
+            className={optionStatus === status ? "btn-primary" : ""}
+            onClick={() => setOptionStatus(status)}
+          >
+            {status === "all"
+              ? "Tất cả"
+              : status === "active"
+                ? "Đang bán"
+                : "Ngừng bán"}
+          </Button>
+        ))}
+        <span className="text-xs text-stone-500">
+          Áp dụng cho Size và Topping trên mọi sản phẩm đang hiển thị.
+        </span>
+      </div>
       {success && (
         <div
           role="status"
@@ -214,7 +297,14 @@ export function ProductsPage() {
                 title="Size · giá upsize"
                 add={() => setEditor({ kind: "size", product })}
               >
-                {product.variants.map((size) => (
+                {product.variants.filter((size) =>
+                  optionMatches(size, optionStatus),
+                ).length === 0 && (
+                  <Empty>Không có size phù hợp bộ lọc.</Empty>
+                )}
+                {product.variants
+                  .filter((size) => optionMatches(size, optionStatus))
+                  .map((size) => (
                   <div
                     key={size.id}
                     className="flex items-center justify-between py-2"
@@ -224,26 +314,68 @@ export function ProductsPage() {
                     </span>
                     <span className="flex items-center gap-2">
                       +{money(size.price)}
-                      {!size.is_active && <StatusBadge status="inactive" />}
+                      <StatusBadge
+                        status={size.is_active ? "active" : "inactive"}
+                      />
                       {canManage && (
-                        <Button
-                          aria-label={`Sửa size ${size.name}`}
-                          onClick={() =>
-                            setEditor({ kind: "size", product, size })
-                          }
-                        >
-                          <PencilSimple />
-                        </Button>
+                        <>
+                          <Button
+                            aria-label={`Sửa size ${size.name}`}
+                            onClick={() =>
+                              setEditor({ kind: "size", product, size })
+                            }
+                          >
+                            <PencilSimple />
+                          </Button>
+                          <Button
+                            aria-label={`${size.is_active ? "Ngừng bán" : "Kích hoạt lại"} size ${size.name}`}
+                            onClick={() =>
+                              setOptionAction({
+                                kind: "status",
+                                optionKind: "size",
+                                product,
+                                option: size,
+                                nextActive: !size.is_active,
+                              })
+                            }
+                          >
+                            {size.is_active ? (
+                              <Power />
+                            ) : (
+                              <ArrowCounterClockwise />
+                            )}
+                          </Button>
+                          <Button
+                            aria-label={`Xóa size ${size.name}`}
+                            onClick={() =>
+                              setOptionAction({
+                                kind: "delete",
+                                optionKind: "size",
+                                product,
+                                option: size,
+                              })
+                            }
+                          >
+                            <Trash />
+                          </Button>
+                        </>
                       )}
                     </span>
                   </div>
-                ))}
+                  ))}
               </OptionList>
               <OptionList
                 title="Topping"
                 add={() => setEditor({ kind: "topping", product })}
               >
-                {product.toppings.map((topping) => (
+                {product.toppings.filter((topping) =>
+                  optionMatches(topping, optionStatus),
+                ).length === 0 && (
+                  <Empty>Không có topping phù hợp bộ lọc.</Empty>
+                )}
+                {product.toppings
+                  .filter((topping) => optionMatches(topping, optionStatus))
+                  .map((topping) => (
                   <div
                     key={topping.id}
                     className="flex items-center justify-between py-2"
@@ -251,20 +383,55 @@ export function ProductsPage() {
                     <b>{topping.name}</b>
                     <span className="flex items-center gap-2">
                       +{money(topping.price)}
-                      {!topping.is_active && <StatusBadge status="inactive" />}
+                      <StatusBadge
+                        status={topping.is_active ? "active" : "inactive"}
+                      />
                       {canManage && (
-                        <Button
-                          aria-label={`Sửa topping ${topping.name}`}
-                          onClick={() =>
-                            setEditor({ kind: "topping", product, topping })
-                          }
-                        >
-                          <PencilSimple />
-                        </Button>
+                        <>
+                          <Button
+                            aria-label={`Sửa topping ${topping.name}`}
+                            onClick={() =>
+                              setEditor({ kind: "topping", product, topping })
+                            }
+                          >
+                            <PencilSimple />
+                          </Button>
+                          <Button
+                            aria-label={`${topping.is_active ? "Ngừng bán" : "Kích hoạt lại"} topping ${topping.name}`}
+                            onClick={() =>
+                              setOptionAction({
+                                kind: "status",
+                                optionKind: "topping",
+                                product,
+                                option: topping,
+                                nextActive: !topping.is_active,
+                              })
+                            }
+                          >
+                            {topping.is_active ? (
+                              <Power />
+                            ) : (
+                              <ArrowCounterClockwise />
+                            )}
+                          </Button>
+                          <Button
+                            aria-label={`Xóa topping ${topping.name}`}
+                            onClick={() =>
+                              setOptionAction({
+                                kind: "delete",
+                                optionKind: "topping",
+                                product,
+                                option: topping,
+                              })
+                            }
+                          >
+                            <Trash />
+                          </Button>
+                        </>
                       )}
                     </span>
                   </div>
-                ))}
+                  ))}
               </OptionList>
             </Panel>
           ))}
@@ -286,7 +453,91 @@ export function ProductsPage() {
           }}
         />
       )}
+      {optionAction && (
+        <OptionConfirmationDialog
+          action={optionAction}
+          busy={actionBusy}
+          error={actionError}
+          close={() => {
+            if (!actionBusy) {
+              setActionError("");
+              setOptionAction(null);
+            }
+          }}
+          confirm={() => void confirmOptionAction()}
+        />
+      )}
     </>
+  );
+}
+
+function optionMatches(
+  option: { is_active: boolean },
+  status: OptionStatus,
+): boolean {
+  if (status === "all") return true;
+  return option.is_active === (status === "active");
+}
+
+function OptionConfirmationDialog({
+  action,
+  busy,
+  error,
+  close,
+  confirm,
+}: {
+  action: OptionAction;
+  busy: boolean;
+  error: string;
+  close: () => void;
+  confirm: () => void;
+}) {
+  const label = action.optionKind === "size" ? "Size" : "Topping";
+  const title =
+    action.kind === "delete"
+      ? `Xóa ${label}`
+      : action.nextActive
+        ? `Kích hoạt lại ${label}`
+        : `Ngừng bán ${label}`;
+  const message =
+    action.kind === "delete"
+      ? "Bạn có chắc muốn xóa lựa chọn này? Nếu đã được sử dụng, hệ thống sẽ chỉ ngừng bán để bảo vệ lịch sử."
+      : action.nextActive
+        ? `Bạn có chắc muốn kích hoạt lại ${label} này?`
+        : `Bạn có chắc muốn ngừng bán ${label} này?`;
+  return (
+    <div
+      className="dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && close()}
+    >
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <h2 className="font-serif text-2xl font-bold">{title}</h2>
+        <p className="mt-4">{message}</p>
+        <dl className="mt-4 rounded-lg bg-stone-50 p-3">
+          <dt className="text-sm text-stone-500">Lựa chọn</dt>
+          <dd className="font-bold">{action.option.name}</dd>
+        </dl>
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button type="button" disabled={busy} onClick={close}>
+            Hủy
+          </Button>
+          <Button
+            type="button"
+            className={action.kind === "delete" ? "btn-danger" : "btn-primary"}
+            disabled={busy}
+            onClick={confirm}
+          >
+            {busy ? "Đang xử lý..." : "Xác nhận"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -435,7 +686,9 @@ function EditorDialog({
         const payload = {
           name: String(form.get("name")),
           price: String(form.get("price")),
-          is_active: form.get("is_active") === "on",
+          ...(editor.size
+            ? {}
+            : { is_active: form.get("is_active") === "on" }),
         } satisfies CreateVariantRequest | UpdateVariantRequest;
         await request<Variant>(
           editor.size
@@ -457,7 +710,9 @@ function EditorDialog({
             body: JSON.stringify({
               name: form.get("name"),
               price: form.get("price"),
-              is_active: form.get("is_active") === "on",
+              ...(editor.topping
+                ? {}
+                : { is_active: form.get("is_active") === "on" }),
             }),
           },
         );
@@ -680,18 +935,17 @@ function EditorDialog({
                   required
                 />
               </label>
-              <label className="flex gap-2">
-                <input
-                  name="is_active"
-                  type="checkbox"
-                  defaultChecked={
-                    (editor.kind === "size"
-                      ? editor.size?.is_active
-                      : editor.topping?.is_active) ?? true
-                  }
-                />{" "}
-                Đang bán
-              </label>
+              {((editor.kind === "size" && !editor.size) ||
+                (editor.kind === "topping" && !editor.topping)) && (
+                <label className="flex gap-2">
+                  <input
+                    name="is_active"
+                    type="checkbox"
+                    defaultChecked
+                  />{" "}
+                  Đang bán
+                </label>
+              )}
             </>
           )}
           {editor.kind === "topping" && (
@@ -771,4 +1025,18 @@ function categoryDeleteError(reason: unknown): string {
       return "Danh mục cần xóa không còn tồn tại.";
   }
   return reason instanceof Error ? reason.message : "Không thể xóa danh mục";
+}
+
+function optionActionError(reason: unknown): string {
+  if (reason instanceof ApiError) {
+    if (reason.code === "last_active_variant")
+      return "Sản phẩm phải còn ít nhất một size đang bán. Hãy kích hoạt hoặc thêm size khác trước.";
+    if (reason.code === "product_inactive")
+      return "Hãy kích hoạt sản phẩm trước khi kích hoạt lại size hoặc topping.";
+    if (reason.code === "variant_delete_conflict" || reason.code === "topping_delete_conflict")
+      return "Lựa chọn vừa phát sinh dữ liệu liên quan nên chưa thể xóa. Vui lòng tải lại và thử ngừng bán.";
+    if (reason.code === "variant_not_found" || reason.code === "topping_not_found")
+      return "Lựa chọn không còn tồn tại. Danh sách sẽ được tải lại ở lần thao tác tiếp theo.";
+  }
+  return reason instanceof Error ? reason.message : "Không thể cập nhật lựa chọn";
 }

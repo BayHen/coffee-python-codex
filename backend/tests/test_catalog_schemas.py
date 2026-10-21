@@ -9,6 +9,7 @@ from app.catalog.schemas import (
     CategoryCreate,
     ProductCreate,
     ProductUpdate,
+    ToppingUpdate,
     VariantCreate,
     VariantUpdate,
 )
@@ -34,6 +35,8 @@ def test_catalog_inputs_are_normalized() -> None:
         (VariantCreate, {"name": "M", "price": "1.001"}),
         (VariantCreate, {"sku": "MANUAL", "name": "M", "price": "1.00"}),
         (VariantUpdate, {"sku": "MANUAL"}),
+        (VariantUpdate, {"is_active": False}),
+        (ToppingUpdate, {"is_active": False}),
         (ProductUpdate, {}),
         (ProductUpdate, {"is_active": None}),
     ],

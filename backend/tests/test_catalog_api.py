@@ -176,12 +176,11 @@ def test_catalog_crud_filtering_and_soft_delete(catalog_setup: dict[str, Any]) -
     assert listing.json()["total"] == 1
     assert listing.json()["items"][0]["name"] == "Caffè Latte"
 
-    assert (
-        client.delete(
-            f"/products/{product['id']}/variants/{medium['id']}", headers=headers
-        ).status_code
-        == 204
+    removed_variant = client.delete(
+        f"/products/{product['id']}/variants/{medium['id']}", headers=headers
     )
+    assert removed_variant.status_code == 200
+    assert removed_variant.json()["action"] == "deleted"
 
     assert (
         client.delete(f"/products/{product['id']}", headers=headers).status_code == 204
@@ -189,7 +188,7 @@ def test_catalog_crud_filtering_and_soft_delete(catalog_setup: dict[str, Any]) -
     saved = client.get(f"/products/{product['id']}", headers=headers)
     assert saved.status_code == 200
     assert saved.json()["is_active"] is False
-    assert len(saved.json()["variants"]) == 3
+    assert len(saved.json()["variants"]) == 2
 
     category_delete = client.delete(f"/categories/{category['id']}", headers=headers)
     assert category_delete.status_code == 409
@@ -226,6 +225,41 @@ def test_catalog_validation_conflicts_and_rbac(catalog_setup: dict[str, Any]) ->
         == 403
     )
     assert client.get("/products").status_code == 401
+
+    protected_product = client.post(
+        "/products",
+        headers=manager,
+        json={"category_id": created.json()["id"], "name": "Protected"},
+    ).json()
+    protected_variant = protected_product["variants"][0]
+    protected_topping = client.post(
+        f"/products/{protected_product['id']}/toppings",
+        headers=manager,
+        json={"name": "Foam", "price": "1000.00"},
+    ).json()
+    assert (
+        client.patch(
+            f"/products/{protected_product['id']}/variants/{protected_variant['id']}/status",
+            headers=staff,
+            json={"is_active": False},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete(
+            f"/products/{protected_product['id']}/toppings/{protected_topping['id']}",
+            headers=staff,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(
+            "/products/999999/variants/999999/status",
+            headers=manager,
+            json={"is_active": True},
+        ).status_code
+        == 404
+    )
 
     bad_price = client.post(
         "/products/1/variants",
@@ -274,6 +308,11 @@ def test_category_reassignment_preserves_products_and_options(
         headers=manager,
         json={"name": "M", "price": "5000.00"},
     ).json()
+    backup_variant = client.post(
+        f"/products/{product['id']}/variants",
+        headers=manager,
+        json={"name": "L", "price": "10000.00"},
+    ).json()
     topping = client.post(
         f"/products/{product['id']}/toppings",
         headers=manager,
@@ -307,6 +346,51 @@ def test_category_reassignment_preserves_products_and_options(
         headers=manager,
         params={"date_from": today, "date_to": today},
     ).json()
+
+    deactivated = client.patch(
+        f"/products/{product['id']}/variants/{variant['id']}/status",
+        headers=manager,
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    assert deactivated.json()["id"] == variant["id"]
+    assert deactivated.json()["sku"] == variant["sku"]
+    assert deactivated.json()["is_active"] is False
+    last_active = client.patch(
+        f"/products/{product['id']}/variants/{backup_variant['id']}/status",
+        headers=manager,
+        json={"is_active": False},
+    )
+    assert last_active.status_code == 409
+    assert last_active.json()["detail"]["code"] == "last_active_variant"
+    reactivated = client.patch(
+        f"/products/{product['id']}/variants/{variant['id']}/status",
+        headers=manager,
+        json={"is_active": True},
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["id"] == variant["id"]
+    assert reactivated.json()["sku"] == variant["sku"]
+
+    used_variant = client.delete(
+        f"/products/{product['id']}/variants/{variant['id']}", headers=manager
+    )
+    assert used_variant.status_code == 200
+    assert used_variant.json()["action"] == "deactivated"
+    assert (
+        client.patch(
+            f"/products/{product['id']}/variants/{variant['id']}/status",
+            headers=manager,
+            json={"is_active": True},
+        ).json()["sku"]
+        == variant["sku"]
+    )
+
+    unused_topping = client.delete(
+        f"/products/{product['id']}/toppings/{topping['id']}", headers=manager
+    )
+    assert unused_topping.status_code == 200
+    assert unused_topping.json()["action"] == "deleted"
 
     direct_delete = client.delete(f"/categories/{cafe['id']}", headers=manager)
     assert direct_delete.status_code == 409
@@ -357,8 +441,11 @@ def test_category_reassignment_preserves_products_and_options(
     assert saved_product["id"] == product["id"]
     assert saved_product["category_id"] == other["id"]
     assert saved_product["base_price"] == "32000.00"
-    assert {item["id"] for item in saved_product["variants"]} == {variant["id"]}
-    assert {item["id"] for item in saved_product["toppings"]} == {topping["id"]}
+    assert {item["id"] for item in saved_product["variants"]} == {
+        variant["id"],
+        backup_variant["id"],
+    }
+    assert saved_product["toppings"] == []
     order_after = client.get(f"/orders/{order['id']}", headers=manager).json()
     revenue_after = client.get(
         "/reports/revenue/summary",

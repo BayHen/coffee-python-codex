@@ -74,7 +74,7 @@ describe("generated immutable variant SKU", () => {
     await user.click(within(createDialog).getByRole("button", { name: "Lưu" }));
 
     expect(requests).toHaveLength(2);
-    expect(requests[0].body).toEqual({ name: "M", price: "7000", is_active: true });
+    expect(requests[0].body).toEqual({ name: "M", price: "7000" });
     expect(requests[1].body).toEqual({ name: "L", price: "10000", is_active: true });
     expect(requests.every((entry) => !("sku" in entry.body))).toBe(true);
   });

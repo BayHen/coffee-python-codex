@@ -145,8 +145,10 @@ export function ProductPicker({ order, disabled, added }: ProductPickerProps) {
 }
 
 function ProductConfigurationDialog({ product, order, close, added }: { product: Product; order: SessionOrder; close: () => void; added: (priceChanged: boolean) => Promise<void> }) {
-  const sizes = product.variants.filter((variant) => variant.is_active && !isAutomaticVariant(product, variant));
-  const defaultVariant = product.variants.find((variant) => variant.is_active && isAutomaticVariant(product, variant));
+  const [refreshedProduct, setRefreshedProduct] = useState<Product | null>(null);
+  const configuredProduct = refreshedProduct ?? product;
+  const sizes = configuredProduct.variants.filter((variant) => variant.is_active && !isAutomaticVariant(configuredProduct, variant));
+  const defaultVariant = configuredProduct.variants.find((variant) => variant.is_active && isAutomaticVariant(configuredProduct, variant));
   const [sizeId, setSizeId] = useState(sizes.length === 1 ? String(sizes[0].id) : "");
   const [toppingIds, setToppingIds] = useState<number[]>([]);
   const [quantity, setQuantity] = useState(1);
@@ -154,11 +156,11 @@ function ProductConfigurationDialog({ product, order, close, added }: { product:
   const [error, setError] = useState("");
   const [requestKey] = useState(() => idempotencyKey(`order-item-${order.id}`));
   const closeRef = useRef<HTMLButtonElement>(null);
-  const toppings = product.toppings.filter((topping) => topping.is_active);
+  const toppings = configuredProduct.toppings.filter((topping) => topping.is_active);
   const selectedVariant = sizes.length > 0
     ? sizes.find((variant) => variant.id === Number(sizeId))
     : defaultVariant;
-  const basePrice = Number(product.base_price);
+  const basePrice = Number(configuredProduct.base_price);
   const sizePrice = Number(selectedVariant?.price ?? 0);
   const toppingPrice = toppings
     .filter((topping) => toppingIds.includes(topping.id))
@@ -182,7 +184,7 @@ function ProductConfigurationDialog({ product, order, close, added }: { product:
         topping_ids: number[];
         quantity: number;
       } = {
-        product_id: product.id,
+        product_id: configuredProduct.id,
         topping_ids: toppingIds,
         quantity,
       };
@@ -196,6 +198,21 @@ function ProductConfigurationDialog({ product, order, close, added }: { product:
       const priceChanged = Math.abs(authoritativeDelta - lineTotal) > 0.001;
       await added(priceChanged);
     } catch (reason) {
+      if (
+        reason instanceof ApiError &&
+        ["variant_unavailable", "topping_unavailable", "topping_not_found", "size_required"].includes(reason.code ?? "")
+      ) {
+        try {
+          const refreshed = normalizeProduct(
+            await request<Product>(`/products/${configuredProduct.id}`),
+          );
+          setRefreshedProduct(refreshed);
+          setSizeId("");
+          setToppingIds([]);
+        } catch {
+          // Keep the authoritative add-item error if refreshing also fails.
+        }
+      }
       setError(addItemError(reason));
     } finally {
       setAdding(false);
@@ -203,8 +220,8 @@ function ProductConfigurationDialog({ product, order, close, added }: { product:
   }
 
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !adding && close()} onKeyDown={(event) => { if (event.key === "Escape" && !adding) close(); }}>
-    <div className="dialog max-w-2xl" role="dialog" aria-modal="true" aria-label={`Cấu hình ${product.name}`}>
-      <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-bold uppercase text-coffee">{product.category?.name}</p><h2 className="font-serif text-2xl font-bold">{product.name}</h2><p className="mt-1 text-stone-600">Giá cơ bản: {money(product.base_price)}</p></div><button ref={closeRef} type="button" className="btn" aria-label="Đóng" disabled={adding} onClick={close}><X /></button></div>
+    <div className="dialog max-w-2xl" role="dialog" aria-modal="true" aria-label={`Cấu hình ${configuredProduct.name}`}>
+      <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-bold uppercase text-coffee">{configuredProduct.category?.name}</p><h2 className="font-serif text-2xl font-bold">{configuredProduct.name}</h2><p className="mt-1 text-stone-600">Giá cơ bản: {money(configuredProduct.base_price)}</p></div><button ref={closeRef} type="button" className="btn" aria-label="Đóng" disabled={adding} onClick={close}><X /></button></div>
       <div className="mt-5 space-y-5">
         {sizes.length > 0 && <fieldset><legend className="label">Size</legend><div className="grid gap-2 sm:grid-cols-2">{sizes.map((size) => <label key={size.id} className={`cursor-pointer rounded-lg border p-3 ${size.id === Number(sizeId) ? "border-coffee bg-amber-50" : "border-stone-200"}`}><input className="mr-2" type="radio" name="size" value={size.id} checked={size.id === Number(sizeId)} onChange={() => setSizeId(String(size.id))} />{size.name}<b className="float-right">+{money(size.price)}</b></label>)}</div></fieldset>}
         {toppings.length > 0 && <fieldset><legend className="label">Topping</legend><div className="grid gap-2 sm:grid-cols-2">{toppings.map((topping) => <label key={topping.id} className={`cursor-pointer rounded-lg border p-3 ${toppingIds.includes(topping.id) ? "border-coffee bg-amber-50" : "border-stone-200"}`}><input className="mr-2" type="checkbox" checked={toppingIds.includes(topping.id)} onChange={(event) => setToppingIds((current) => event.target.checked ? [...current, topping.id] : current.filter((id) => id !== topping.id))} />{topping.name}<b className="float-right">+{money(topping.price)}</b></label>)}</div></fieldset>}

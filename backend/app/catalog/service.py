@@ -14,6 +14,8 @@ from app.catalog.schemas import (
     CategoryReassignDelete,
     CategoryReassignDeleteResult,
     CategoryUpdate,
+    OptionRemovalResult,
+    OptionStatusUpdate,
     ProductCreate,
     ProductPage,
     ProductUpdate,
@@ -299,12 +301,77 @@ class CatalogService:
             ) from exc
         return variant
 
-    def deactivate_variant(self, product_id: int, variant_id: int) -> None:
+    def set_variant_status(
+        self, product_id: int, variant_id: int, payload: OptionStatusUpdate
+    ) -> ProductVariant:
         with self.db.begin():
+            product = self.repository.get_product(product_id, lock=True)
+            if product is None:
+                raise api_error(404, "product_not_found", "Product not found")
             variant = self.repository.get_variant(product_id, variant_id, lock=True)
             if variant is None:
                 raise api_error(404, "variant_not_found", "Product variant not found")
-            variant.is_active = False
+            if payload.is_active and not product.is_active:
+                raise api_error(
+                    409,
+                    "product_inactive",
+                    "Cannot activate a size while its product is inactive",
+                )
+            if (
+                not payload.is_active
+                and variant.is_active
+                and self.repository.count_active_variants(product_id) <= 1
+            ):
+                raise api_error(
+                    409,
+                    "last_active_variant",
+                    "A product must keep at least one active size",
+                )
+            variant.is_active = payload.is_active
+            self.db.flush()
+        return variant
+
+    def remove_variant(self, product_id: int, variant_id: int) -> OptionRemovalResult:
+        try:
+            with self.db.begin():
+                product = self.repository.get_product(product_id, lock=True)
+                if product is None:
+                    raise api_error(404, "product_not_found", "Product not found")
+                variant = self.repository.get_variant(product_id, variant_id, lock=True)
+                if variant is None:
+                    raise api_error(
+                        404, "variant_not_found", "Product variant not found"
+                    )
+                if (
+                    variant.is_active
+                    and self.repository.count_active_variants(product_id) <= 1
+                ):
+                    raise api_error(
+                        409,
+                        "last_active_variant",
+                        "A product must keep at least one active size",
+                    )
+                if self.repository.variant_has_dependencies(variant_id):
+                    variant.is_active = False
+                    action = "deactivated"
+                    is_active: bool | None = False
+                else:
+                    self.repository.delete_variant(variant)
+                    action = "deleted"
+                    is_active = None
+                self.db.flush()
+        except IntegrityError as exc:
+            raise api_error(
+                409,
+                "variant_delete_conflict",
+                "The size gained a dependency and could not be deleted",
+            ) from exc
+        return OptionRemovalResult(
+            entity_type="variant",
+            entity_id=variant_id,
+            action=action,
+            is_active=is_active,
+        )
 
     def list_toppings(self, product_id: int) -> list[ProductTopping]:
         self.get_product(product_id)
@@ -340,3 +407,54 @@ class CatalogService:
             raise api_error(
                 409, "topping_conflict", "Topping name already exists"
             ) from exc
+
+    def set_topping_status(
+        self, product_id: int, topping_id: int, payload: OptionStatusUpdate
+    ) -> ProductTopping:
+        with self.db.begin():
+            product = self.repository.get_product(product_id, lock=True)
+            if product is None:
+                raise api_error(404, "product_not_found", "Product not found")
+            topping = self.repository.get_topping(product_id, topping_id, lock=True)
+            if topping is None:
+                raise api_error(404, "topping_not_found", "Topping not found")
+            if payload.is_active and not product.is_active:
+                raise api_error(
+                    409,
+                    "product_inactive",
+                    "Cannot activate a topping while its product is inactive",
+                )
+            topping.is_active = payload.is_active
+            self.db.flush()
+        return topping
+
+    def remove_topping(self, product_id: int, topping_id: int) -> OptionRemovalResult:
+        try:
+            with self.db.begin():
+                product = self.repository.get_product(product_id, lock=True)
+                if product is None:
+                    raise api_error(404, "product_not_found", "Product not found")
+                topping = self.repository.get_topping(product_id, topping_id, lock=True)
+                if topping is None:
+                    raise api_error(404, "topping_not_found", "Topping not found")
+                if self.repository.topping_has_order_items(topping_id):
+                    topping.is_active = False
+                    action = "deactivated"
+                    is_active: bool | None = False
+                else:
+                    self.repository.delete_topping(topping)
+                    action = "deleted"
+                    is_active = None
+                self.db.flush()
+        except IntegrityError as exc:
+            raise api_error(
+                409,
+                "topping_delete_conflict",
+                "The topping gained a dependency and could not be deleted",
+            ) from exc
+        return OptionRemovalResult(
+            entity_type="topping",
+            entity_id=topping_id,
+            action=action,
+            is_active=is_active,
+        )

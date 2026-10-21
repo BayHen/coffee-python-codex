@@ -76,6 +76,55 @@ it("keeps the configuration popup and choices when add-to-order fails", async ()
   expect(within(dialog).getByLabelText("Số lượng")).toHaveValue(1);
 });
 
+it("refetches options when a selected size is deactivated while the popup is open", async () => {
+  const order: SessionOrder = {
+    id: 15, session_id: 3, order_type: "initial", sequence_number: 1,
+    status: "draft", subtotal_amount: "0.00", total_amount: "0.00",
+    confirmed_by: null, confirmed_at: null, created_at: new Date().toISOString(), items: [],
+  };
+  const initial = {
+    id: 4, category_id: 2, name: "Latte", base_price: "30000.00",
+    is_active: true, category: { id: 2, name: "Coffee" },
+    toppings: [{ id: 8, product_id: 4, name: "Foam", price: "3000.00", is_active: true }],
+    variants: [
+      { id: 6, product_id: 4, sku: "LATTE-M", name: "M", price: "5000.00", is_active: true },
+      { id: 7, product_id: 4, sku: "LATTE-L", name: "L", price: "10000.00", is_active: true },
+    ],
+  };
+  const refreshed = {
+    ...initial,
+    toppings: [{ ...initial.toppings[0], is_active: false }],
+    variants: [
+      { ...initial.variants[0], is_active: false },
+      initial.variants[1],
+    ],
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "POST") {
+      return json({ detail: { code: "variant_unavailable", message: "Product variant is unavailable" } }, 409);
+    }
+    if (url.endsWith("/products/4")) return json(refreshed);
+    return json({ items: [initial], total: 1, page: 1, page_size: 20, pages: 1 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const user = userEvent.setup();
+  render(<ProductPicker order={order} disabled={false} added={vi.fn()} />);
+
+  await user.type(screen.getByRole("combobox", { name: "Tìm sản phẩm theo tên" }), "latte");
+  await user.click(await screen.findByRole("option", { name: /Latte/ }));
+  const dialog = screen.getByRole("dialog", { name: "Cấu hình Latte" });
+  await user.click(within(dialog).getByRole("radio", { name: /M/ }));
+  await user.click(within(dialog).getByRole("checkbox", { name: /Foam/ }));
+  await user.click(within(dialog).getByRole("button", { name: /Thêm vào đơn/ }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Product variant is unavailable");
+  expect(within(dialog).queryByRole("radio", { name: /M/ })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("radio", { name: /L/ })).not.toBeChecked();
+  expect(within(dialog).queryByRole("checkbox", { name: /Foam/ })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/products/4"))).toBe(true);
+});
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it("loads persisted table session history and separates draft from payable total", async () => {

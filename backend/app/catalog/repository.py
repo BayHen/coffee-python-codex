@@ -5,7 +5,15 @@ from decimal import Decimal
 from sqlalchemy import Select, exists, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Category, OrderItem, Product, ProductTopping, ProductVariant
+from app.db.models import (
+    Category,
+    OrderItem,
+    OrderItemTopping,
+    Product,
+    ProductTopping,
+    ProductVariant,
+    Recipe,
+)
 
 VIETNAMESE_SEARCH_SOURCE = (
     "àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"
@@ -199,6 +207,32 @@ class CatalogRepository:
     def add_variant(self, variant: ProductVariant) -> None:
         self.db.add(variant)
 
+    def count_active_variants(self, product_id: int) -> int:
+        return (
+            self.db.scalar(
+                select(func.count(ProductVariant.id)).where(
+                    ProductVariant.product_id == product_id,
+                    ProductVariant.is_active.is_(True),
+                )
+            )
+            or 0
+        )
+
+    def variant_has_dependencies(self, variant_id: int) -> bool:
+        return bool(
+            self.db.scalar(
+                select(
+                    or_(
+                        exists().where(OrderItem.variant_id == variant_id),
+                        exists().where(Recipe.variant_id == variant_id),
+                    )
+                )
+            )
+        )
+
+    def delete_variant(self, variant: ProductVariant) -> None:
+        self.db.delete(variant)
+
     def remove_unused_automatic_variant(self, product_id: int) -> None:
         variant = self.db.scalar(
             select(ProductVariant).where(
@@ -229,3 +263,13 @@ class CatalogRepository:
                 .order_by(ProductTopping.id)
             ).all()
         )
+
+    def topping_has_order_items(self, topping_id: int) -> bool:
+        return bool(
+            self.db.scalar(
+                select(exists().where(OrderItemTopping.topping_id == topping_id))
+            )
+        )
+
+    def delete_topping(self, topping: ProductTopping) -> None:
+        self.db.delete(topping)

@@ -77,7 +77,13 @@ export type CreateVariantRequest = {
 export type UpdateVariantRequest = {
   name?: string;
   price?: string;
-  is_active?: boolean;
+};
+export type OptionStatus = "all" | "active" | "inactive";
+export type OptionRemovalResult = {
+  entity_type: "variant" | "topping";
+  entity_id: number;
+  action: "deleted" | "deactivated";
+  is_active: boolean | null;
 };
 export type OrderStatus = "draft" | "placed" | "paid" | "cancelled";
 export type ItemTopping = { id: number; name: string; price: string };
