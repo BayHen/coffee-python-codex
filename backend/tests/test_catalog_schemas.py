@@ -10,17 +10,17 @@ from app.catalog.schemas import (
     ProductCreate,
     ProductUpdate,
     VariantCreate,
+    VariantUpdate,
 )
 
 
 def test_catalog_inputs_are_normalized() -> None:
     category = CategoryCreate(name="  Cà phê   nóng ")
     product = ProductCreate(category_id=1, name="  Cà phê sữa  ")
-    variant = VariantCreate(sku=" latte.m ", name="  Size M ", price="45000.00")
+    variant = VariantCreate(name="  Size M ", price="45000.00")
 
     assert category.name == "Cà phê nóng"
     assert product.name == "Cà phê sữa"
-    assert variant.sku == "LATTE.M"
     assert variant.name == "Size M"
     assert variant.price == Decimal("45000.00")
 
@@ -30,9 +30,10 @@ def test_catalog_inputs_are_normalized() -> None:
     [
         (CategoryCreate, {"name": "   "}),
         (ProductCreate, {"category_id": 0, "name": "Latte"}),
-        (VariantCreate, {"sku": "bad sku", "name": "M", "price": "1.00"}),
-        (VariantCreate, {"sku": "OK", "name": "M", "price": "-0.01"}),
-        (VariantCreate, {"sku": "OK", "name": "M", "price": "1.001"}),
+        (VariantCreate, {"name": "M", "price": "-0.01"}),
+        (VariantCreate, {"name": "M", "price": "1.001"}),
+        (VariantCreate, {"sku": "MANUAL", "name": "M", "price": "1.00"}),
+        (VariantUpdate, {"sku": "MANUAL"}),
         (ProductUpdate, {}),
         (ProductUpdate, {"is_active": None}),
     ],

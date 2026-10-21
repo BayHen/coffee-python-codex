@@ -142,7 +142,13 @@ class ProductVariant(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    sku: Mapped[str] = mapped_column(String(64), unique=True)
+    sku: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        server_default=text(
+            "'VAR-' || lpad(nextval('product_variant_sku_seq')::text, 6, '0')"
+        ),
+    )
     name: Mapped[str] = mapped_column(String(100))
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))

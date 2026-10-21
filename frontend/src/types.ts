@@ -38,6 +38,7 @@ export type Variant = {
   price: string;
   is_active: boolean;
 };
+export type VariantResponse = Variant;
 export type Topping = {
   id: number;
   product_id: number;
@@ -54,6 +55,29 @@ export type Product = {
   category: Category;
   variants: Variant[];
   toppings: Topping[];
+};
+export type ProductResponse = Product;
+export type CreateProductRequest = {
+  category_id: number;
+  name: string;
+  base_price?: string;
+  is_active?: boolean;
+};
+export type UpdateProductRequest = {
+  category_id?: number;
+  name?: string;
+  base_price?: string;
+  is_active?: boolean;
+};
+export type CreateVariantRequest = {
+  name: string;
+  price: string;
+  is_active?: boolean;
+};
+export type UpdateVariantRequest = {
+  name?: string;
+  price?: string;
+  is_active?: boolean;
 };
 export type OrderStatus = "draft" | "placed" | "paid" | "cancelled";
 export type ItemTopping = { id: number; name: string; price: string };

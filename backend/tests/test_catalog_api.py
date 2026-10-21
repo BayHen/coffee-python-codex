@@ -106,18 +106,33 @@ def test_catalog_crud_filtering_and_soft_delete(catalog_setup: dict[str, Any]) -
     assert product_response.status_code == 201, product_response.text
     product = product_response.json()
 
+    manual_sku_create = client.post(
+        f"/products/{product['id']}/variants",
+        headers=headers,
+        json={"sku": "MANUAL-SKU", "name": "Manual", "price": "1000.00"},
+    )
+    assert manual_sku_create.status_code == 422
+
+    product_sku_update = client.patch(
+        f"/products/{product['id']}",
+        headers=headers,
+        json={"sku": "PRODUCT-SKU"},
+    )
+    assert product_sku_update.status_code == 422
+
     variants = []
-    for sku, name, price in (
-        ("LATTE-S", "Size S", "35000.00"),
-        ("LATTE-M", "Size M", "45000.00"),
-        ("LATTE-L", "Size L", "55000.00"),
+    for name, price in (
+        ("Size S", "35000.00"),
+        ("Size M", "45000.00"),
+        ("Size L", "55000.00"),
     ):
         response = client.post(
             f"/products/{product['id']}/variants",
             headers=headers,
-            json={"sku": sku, "name": name, "price": price},
+            json={"name": name, "price": price},
         )
         assert response.status_code == 201, response.text
+        assert response.json()["sku"].startswith("VAR-")
         assert response.json()["price"] == price
         variants.append(response.json())
 
@@ -127,6 +142,7 @@ def test_catalog_crud_filtering_and_soft_delete(catalog_setup: dict[str, Any]) -
     assert product_update.status_code == 200
     assert product_update.json()["name"] == "Caffè Latte"
     medium = variants[1]
+    medium_sku = medium["sku"]
     variant_update = client.patch(
         f"/products/{product['id']}/variants/{medium['id']}",
         headers=headers,
@@ -134,12 +150,20 @@ def test_catalog_crud_filtering_and_soft_delete(catalog_setup: dict[str, Any]) -
     )
     assert variant_update.status_code == 200
     assert variant_update.json()["price"] == "47000.00"
+    assert variant_update.json()["sku"] == medium_sku
+
+    rejected_sku_update = client.patch(
+        f"/products/{product['id']}/variants/{medium['id']}",
+        headers=headers,
+        json={"sku": "MANUAL-SKU"},
+    )
+    assert rejected_sku_update.status_code == 422
 
     listing = client.get(
         "/products",
         headers=headers,
         params={
-            "search": "LATTE-M",
+            "search": medium_sku,
             "category_id": category["id"],
             "min_price": "40000.00",
             "max_price": "50000.00",
@@ -206,7 +230,7 @@ def test_catalog_validation_conflicts_and_rbac(catalog_setup: dict[str, Any]) ->
     bad_price = client.post(
         "/products/1/variants",
         headers=manager,
-        json={"sku": "BAD", "name": "Bad", "price": "1.001"},
+        json={"name": "Bad", "price": "1.001"},
     )
     assert bad_price.status_code == 422
     bad_range = client.get(
@@ -248,7 +272,7 @@ def test_category_reassignment_preserves_products_and_options(
     variant = client.post(
         f"/products/{product['id']}/variants",
         headers=manager,
-        json={"sku": "CAFE-MUOI-M", "name": "M", "price": "5000.00"},
+        json={"name": "M", "price": "5000.00"},
     ).json()
     topping = client.post(
         f"/products/{product['id']}/toppings",

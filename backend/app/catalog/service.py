@@ -276,7 +276,7 @@ class CatalogService:
                 self.db.flush()
         except IntegrityError as exc:
             raise api_error(
-                409, "variant_conflict", "SKU or variant name already exists"
+                409, "variant_conflict", "Variant name already exists"
             ) from exc
         return variant
 
@@ -295,7 +295,7 @@ class CatalogService:
                 self.db.flush()
         except IntegrityError as exc:
             raise api_error(
-                409, "variant_conflict", "SKU or variant name already exists"
+                409, "variant_conflict", "Variant name already exists"
             ) from exc
         return variant
 

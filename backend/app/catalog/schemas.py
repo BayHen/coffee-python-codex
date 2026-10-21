@@ -6,9 +6,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Name = Annotated[str, Field(min_length=1, max_length=150)]
-Sku = Annotated[
-    str, Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9][A-Z0-9._-]*$")
-]
 Money = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
 
 
@@ -67,15 +64,11 @@ class CategoryReassignDeleteResult(BaseModel):
 
 
 class VariantCreate(BaseModel):
-    sku: Sku
+    model_config = ConfigDict(extra="forbid")
+
     name: Annotated[str, Field(min_length=1, max_length=100)]
     price: Money
     is_active: bool = True
-
-    @field_validator("sku", mode="before")
-    @classmethod
-    def normalize_sku(cls, value: str) -> str:
-        return value.strip().upper()
 
     @field_validator("name", mode="before")
     @classmethod
@@ -84,15 +77,11 @@ class VariantCreate(BaseModel):
 
 
 class VariantUpdate(BaseModel):
-    sku: Sku | None = None
+    model_config = ConfigDict(extra="forbid")
+
     name: Annotated[str | None, Field(min_length=1, max_length=100)] = None
     price: Money | None = None
     is_active: bool | None = None
-
-    @field_validator("sku", mode="before")
-    @classmethod
-    def normalize_sku(cls, value: str | None) -> str | None:
-        return None if value is None else value.strip().upper()
 
     @field_validator("name", mode="before")
     @classmethod
@@ -120,6 +109,8 @@ class VariantView(BaseModel):
 
 
 class ProductCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: int = Field(gt=0)
     name: Name
     base_price: Money = Decimal("0.00")
@@ -132,6 +123,8 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: Annotated[int | None, Field(gt=0)] = None
     name: Name | None = None
     base_price: Money | None = None

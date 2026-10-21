@@ -122,6 +122,39 @@ def test_order_item_keeps_sale_price(connection: Connection) -> None:
             )
 
 
+def test_variant_sku_is_generated_and_immutable(connection: Connection) -> None:
+    suffix = uuid4().hex[:12]
+    category_id = connection.execute(
+        insert(Category).values(name=f"SKU {suffix}").returning(Category.id)
+    ).scalar_one()
+    product_id = connection.execute(
+        insert(Product)
+        .values(category_id=category_id, name=f"Generated SKU {suffix}")
+        .returning(Product.id)
+    ).scalar_one()
+    variant_id, sku = connection.execute(
+        insert(ProductVariant)
+        .values(product_id=product_id, name="Large", price=Decimal("5.00"))
+        .returning(ProductVariant.id, ProductVariant.sku)
+    ).one()
+
+    assert sku.startswith("VAR-")
+    assert sku[4:].isdigit()
+    with pytest.raises(IntegrityError):
+        with connection.begin_nested():
+            connection.execute(
+                ProductVariant.__table__.update()
+                .where(ProductVariant.id == variant_id)
+                .values(sku="MANUAL-SKU")
+            )
+    assert (
+        connection.scalar(
+            select(ProductVariant.sku).where(ProductVariant.id == variant_id)
+        )
+        == sku
+    )
+
+
 def test_payment_retries_cannot_double_charge(connection: Connection) -> None:
     order_id, _, _ = create_order_item(connection)
     payment = {

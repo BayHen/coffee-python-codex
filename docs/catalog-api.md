@@ -41,8 +41,15 @@ VÃ­ dá»¥ táº¡o sáº£n pháº©m vÃ  size:
 ```
 
 ```json
-{"sku": "LATTE-M", "name": "Size M", "price": "45000.00", "is_active": true}
+{"name": "Size M", "price": "45000.00", "is_active": true}
 ```
+
+SKU của size không nằm trong request create/update. PostgreSQL tự cấp mã dạng
+`VAR-000001` từ sequence `product_variant_sku_seq`; API trả SKU trong response.
+Các SKU cũ và SKU `AUTO-{product_id}` của size mặc định được giữ nguyên. API trả
+HTTP 422 nếu client gửi trường `sku`, và trigger database ngăn thay đổi SKU đã lưu.
+Sequence được khởi tạo sau mã `VAR-*` lớn nhất đang có và không dùng `COUNT` hay
+`MAX(id)`, vì vậy nhiều request đồng thời không nhận trùng mã.
 
 Response lá»—i nghiá»‡p vá»¥ cÃ³ dáº¡ng:
 
