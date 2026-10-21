@@ -42,10 +42,22 @@ def test_item_quantity_limits(quantity: int) -> None:
 def test_valid_item_payload_matches_frontend_contract() -> None:
     payload = ItemCreate(variant_id=1, topping_ids=[2, 3], quantity=2)
     assert payload.model_dump() == {
+        "product_id": None,
         "variant_id": 1,
         "topping_ids": [2, 3],
         "quantity": 2,
     }
+
+
+def test_item_payload_allows_product_with_backend_default_size() -> None:
+    payload = ItemCreate(product_id=8, topping_ids=[], quantity=1)
+    assert payload.product_id == 8
+    assert payload.variant_id is None
+
+
+def test_item_payload_requires_product_or_variant() -> None:
+    with pytest.raises(ValidationError):
+        ItemCreate(quantity=1)
 
 
 @pytest.mark.parametrize(

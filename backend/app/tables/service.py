@@ -260,17 +260,56 @@ class TableService:
             )
 
     def add_item(
-        self, order_id: int, variant_id: int, topping_ids: list[int], quantity: int
+        self,
+        order_id: int,
+        product_id: int | None,
+        variant_id: int | None,
+        topping_ids: list[int],
+        quantity: int,
+        idempotency_key: str | None,
+        actor_id: int,
     ) -> Order:
         with self.db.begin():
             order = self.repo.order(order_id, lock=True)
             if order is None:
                 raise api_error(404, "order_not_found", "Session order not found")
+            fingerprint = hashlib.sha256(
+                (
+                    f"{product_id}:{variant_id}:"
+                    f"{','.join(str(item) for item in sorted(topping_ids))}:{quantity}"
+                ).encode()
+            ).hexdigest()
+            if idempotency_key:
+                existing_fingerprint = self.repo.item_request_fingerprint(
+                    order_id, idempotency_key
+                )
+                if existing_fingerprint:
+                    if existing_fingerprint != fingerprint:
+                        raise api_error(
+                            409,
+                            "idempotency_key_reused",
+                            "Key was used for another item configuration",
+                        )
+                    return order
             session = self.repo.session(order.session_id, lock=True)
             self._require_editable(order, session)
-            variant = self.repo.variant(variant_id)
+            variant = (
+                self.repo.variant(variant_id)
+                if variant_id is not None
+                else self.repo.default_variant(product_id or 0)
+            )
             if variant is None:
-                raise api_error(404, "variant_not_found", "Product variant not found")
+                raise api_error(
+                    422,
+                    "size_required",
+                    "Select an available size for this product",
+                )
+            if product_id is not None and variant.product_id != product_id:
+                raise api_error(
+                    422,
+                    "variant_product_mismatch",
+                    "Selected size does not belong to this product",
+                )
             if not variant.is_active or not variant.product.is_active:
                 raise api_error(
                     409, "variant_unavailable", "Product variant is unavailable"
@@ -291,7 +330,7 @@ class TableService:
                 (
                     item
                     for item in order.items
-                    if item.variant_id == variant_id
+                    if item.variant_id == variant.id
                     and sorted(
                         snapshot.topping_id for snapshot in item.topping_snapshots
                     )
@@ -332,6 +371,16 @@ class TableService:
                     )
                 )
             self._recalculate(order)
+            if idempotency_key:
+                order.events.append(
+                    OrderEvent(
+                        actor_user_id=actor_id,
+                        event_type="item_added",
+                        from_status="draft",
+                        to_status="draft",
+                        note=f"{idempotency_key}:{fingerprint}",
+                    )
+                )
         return self.order_view(order_id)
 
     def update_item(self, order_id: int, item_id: int, quantity: int) -> Order:

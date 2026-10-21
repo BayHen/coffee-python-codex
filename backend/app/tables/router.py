@@ -92,10 +92,22 @@ def additional_order(
     "/orders/{order_id}/items", response_model=SessionOrderView, status_code=201
 )
 def add_item(
-    order_id: int, payload: ItemCreate, _principal: Operator, db: Db
+    order_id: int,
+    payload: ItemCreate,
+    principal: Operator,
+    db: Db,
+    key: Annotated[
+        str | None, Header(alias="Idempotency-Key", min_length=8, max_length=128)
+    ] = None,
 ) -> SessionOrderView:
     return TableService(db).add_item(
-        order_id, payload.variant_id, payload.topping_ids, payload.quantity
+        order_id,
+        payload.product_id,
+        payload.variant_id,
+        payload.topping_ids,
+        payload.quantity,
+        key,
+        principal.user_id,
     )
 
 

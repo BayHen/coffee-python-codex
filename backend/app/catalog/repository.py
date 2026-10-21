@@ -7,6 +7,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Category, OrderItem, Product, ProductTopping, ProductVariant
 
+VIETNAMESE_SEARCH_SOURCE = (
+    "àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"
+)
+VIETNAMESE_SEARCH_TARGET = (
+    "aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd"
+)
+
+
+def normalize_search(value: str) -> str:
+    replacements = str.maketrans(VIETNAMESE_SEARCH_SOURCE, VIETNAMESE_SEARCH_TARGET)
+    return value.casefold().translate(replacements)
+
 
 class CatalogRepository:
     def __init__(self, db: Session) -> None:
@@ -117,6 +129,12 @@ class CatalogRepository:
     ) -> tuple[list[Product], int]:
         filters = []
         if search:
+            normalized_search = normalize_search(search)
+            normalized_product_name = func.translate(
+                func.lower(Product.name),
+                VIETNAMESE_SEARCH_SOURCE,
+                VIETNAMESE_SEARCH_TARGET,
+            )
             variant_match = exists().where(
                 ProductVariant.product_id == Product.id,
                 or_(
@@ -124,7 +142,14 @@ class CatalogRepository:
                     ProductVariant.sku.ilike(f"%{search}%"),
                 ),
             )
-            filters.append(or_(Product.name.ilike(f"%{search}%"), variant_match))
+            filters.append(
+                or_(
+                    normalized_product_name.contains(
+                        normalized_search, autoescape=True
+                    ),
+                    variant_match,
+                )
+            )
         if category_id is not None:
             filters.append(Product.category_id == category_id)
         if is_active is not None:

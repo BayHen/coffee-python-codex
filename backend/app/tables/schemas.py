@@ -39,9 +39,16 @@ class OrderCreate(StrictRequest):
 
 
 class ItemCreate(StrictRequest):
-    variant_id: int = Field(gt=0)
+    product_id: Annotated[int | None, Field(gt=0)] = None
+    variant_id: Annotated[int | None, Field(gt=0)] = None
     topping_ids: list[int] = Field(default_factory=list, max_length=20)
     quantity: int = Field(gt=0, le=100)
+
+    @model_validator(mode="after")
+    def require_product_or_variant(self) -> "ItemCreate":
+        if self.product_id is None and self.variant_id is None:
+            raise ValueError("product_id or variant_id is required")
+        return self
 
 
 class ItemUpdate(StrictRequest):

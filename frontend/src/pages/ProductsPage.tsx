@@ -37,11 +37,11 @@ export function ProductsPage() {
         ...p,
         items: Array.isArray(p.items)
           ? p.items.map((product) => ({
-              ...product,
-              base_price: requirePrice(product.base_price, product.name),
-              variants: Array.isArray(product.variants) ? product.variants : [],
-              toppings: Array.isArray(product.toppings) ? product.toppings : [],
-            }))
+            ...product,
+            base_price: requirePrice(product.base_price, product.name),
+            variants: Array.isArray(product.variants) ? product.variants : [],
+            toppings: Array.isArray(product.toppings) ? product.toppings : [],
+          }))
           : [],
       });
       setCategories({ ...c, items: Array.isArray(c.items) ? c.items : [] });
@@ -58,7 +58,7 @@ export function ProductsPage() {
     {success && <div role="status" className="mb-4 rounded-lg bg-green-50 p-3 text-green-800">{success}</div>}
     {error && <div role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-red-700">{error}</div>}
     {!products ? <Panel><Loading /></Panel> : products.items.length === 0 ? <Panel><Empty>Không tìm thấy sản phẩm.</Empty></Panel> : <div className="grid gap-4 xl:grid-cols-2">{products.items.map((product) => <Panel key={product.id} className="overflow-hidden"><div className="flex items-start justify-between gap-4 p-5"><div><span className="text-xs font-bold uppercase text-coffee">{product.category?.name ?? "Chưa phân loại"}</span><h2 className="font-serif text-2xl font-bold">{product.name}</h2><strong className="mt-2 block">Giá cơ bản: {money(product.base_price)}</strong><StatusBadge status={product.is_active ? "active" : "inactive"} /></div>{canManage && <div className="flex gap-1"><Button aria-label={`Sửa ${product.name}`} onClick={() => setEditor({ kind: "product", product })}><PencilSimple /></Button>{product.is_active && <Button aria-label={`Ngừng bán ${product.name}`} onClick={() => void deactivate(`/products/${product.id}`)}><Power /></Button>}</div>}</div>
-      <OptionList title="Size · giá upsize" add={() => setEditor({ kind: "size", product })}>{product.variants.map((size) => <div key={size.id} className="flex items-center justify-between py-2"><span><b>{size.name}</b> <small>{size.sku}</small></span><span className="flex items-center gap-2">+{money(size.price)}{!size.is_active && <StatusBadge status="inactive" />}{canManage && <Button aria-label={`Sửa size ${size.name}`} onClick={() => setEditor({ kind: "size", product, size })}><PencilSimple /></Button>}</span></div>)}</OptionList>
+      <OptionList title="Size · giá upsize" add={() => setEditor({ kind: "size", product })}>{product.variants.map((size) => <div key={size.id} className="flex items-center justify-between py-2"><span><b>{size.name}</b></span><span className="flex items-center gap-2">+{money(size.price)}{!size.is_active && <StatusBadge status="inactive" />}{canManage && <Button aria-label={`Sửa size ${size.name}`} onClick={() => setEditor({ kind: "size", product, size })}><PencilSimple /></Button>}</span></div>)}</OptionList>
       <OptionList title="Topping" add={() => setEditor({ kind: "topping", product })}>{product.toppings.map((topping) => <div key={topping.id} className="flex items-center justify-between py-2"><b>{topping.name}</b><span className="flex items-center gap-2">+{money(topping.price)}{!topping.is_active && <StatusBadge status="inactive" />}{canManage && <Button aria-label={`Sửa topping ${topping.name}`} onClick={() => setEditor({ kind: "topping", product, topping })}><PencilSimple /></Button>}</span></div>)}</OptionList>
     </Panel>)}</div>}
     {editor && <EditorDialog editor={editor} categories={categories?.items ?? []} close={() => setEditor(null)} saved={async (message, deletedCategoryId) => { setEditor(null); setSuccess(message); const resetFilter = deletedCategoryId != null && categoryId === String(deletedCategoryId); if (resetFilter) setCategoryId(""); await load(resetFilter ? "" : undefined); }} />}

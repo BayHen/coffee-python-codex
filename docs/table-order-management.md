@@ -81,3 +81,18 @@ deleted or zeroed. Receipts remain available through `GET /receipts` and
 
 Revenue reports aggregate successful payment records, including legacy order payments
 and consolidated session payments. `cash_received` is never counted as revenue.
+
+## Task 14 product search and item configuration
+
+The order screen searches `GET /products` on the server with debounce. Product-name
+matching is case-insensitive, accent-insensitive for Vietnamese, and is applied before
+pagination. Only active products are selectable.
+
+`POST /orders/{id}/items` remains backward compatible with `variant_id`. The current UI
+sends `product_id`, optional `variant_id`, `topping_ids`, and `quantity`. When a product
+has only its persisted `AUTO-{product_id}` variant, the UI hides the size field and the
+backend resolves that default variant. A product with explicit sizes requires a valid
+variant belonging to the same product. The backend validates all catalog relationships
+and calculates the authoritative Decimal price before storing the item snapshot. The UI
+keeps one `Idempotency-Key` for each popup submission; the order-row lock and persisted
+order event make a retry return the existing result instead of incrementing twice.

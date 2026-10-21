@@ -73,6 +73,7 @@ def table_setup(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
                     db.add(variant)
                     db.flush()
                     variant_id = variant.id
+                    product_id = product.id
 
                 def test_session() -> Iterator[Session]:
                     with Session(
@@ -93,7 +94,12 @@ def table_setup(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
                         tokens[role_name] = {
                             "Authorization": f"Bearer {response.json()['access_token']}"
                         }
-                    yield {"client": client, "tokens": tokens, "variant_id": variant_id}
+                    yield {
+                        "client": client,
+                        "tokens": tokens,
+                        "variant_id": variant_id,
+                        "product_id": product_id,
+                    }
             finally:
                 app.dependency_overrides.pop(get_session, None)
                 outer.rollback()
@@ -221,3 +227,79 @@ def test_initial_additional_bill_checkout_and_rbac(table_setup: dict[str, Any]) 
         ).status_code
         == 409
     )
+
+
+def test_add_item_uses_default_variant_and_validates_product(
+    table_setup: dict[str, Any],
+) -> None:
+    client: TestClient = table_setup["client"]
+    manager = table_setup["tokens"]["Manager"]
+    staff = table_setup["tokens"]["Staff"]
+    category = client.post(
+        "/categories", headers=manager, json={"name": f"No size {uuid4().hex}"}
+    ).json()
+    product_response = client.post(
+        "/products",
+        headers=manager,
+        json={
+            "category_id": category["id"],
+            "name": "Cold brew",
+            "base_price": "42000.00",
+        },
+    )
+    assert product_response.status_code == 201, product_response.text
+    product = product_response.json()
+    table = client.post(
+        "/tables",
+        headers=manager,
+        json={"table_number": uuid4().hex[:8], "name": "Default size"},
+    ).json()
+    session = client.post(f"/tables/{table['id']}/sessions", headers=staff).json()
+    order_id = session["orders"][0]["id"]
+
+    missing_ids = client.post(
+        f"/orders/{order_id}/items",
+        headers=staff,
+        json={"quantity": 1},
+    )
+    assert missing_ids.status_code == 422
+    mismatch = client.post(
+        f"/orders/{order_id}/items",
+        headers=staff,
+        json={
+            "product_id": product["id"],
+            "variant_id": table_setup["variant_id"],
+            "quantity": 1,
+        },
+    )
+    assert mismatch.status_code == 422
+    assert mismatch.json()["detail"]["code"] == "variant_product_mismatch"
+
+    item_headers = {**staff, "Idempotency-Key": f"item-{uuid4().hex}"}
+    added = client.post(
+        f"/orders/{order_id}/items",
+        headers=item_headers,
+        json={"product_id": product["id"], "topping_ids": [], "quantity": 2},
+    )
+    assert added.status_code == 201, added.text
+    assert added.json()["items"][0]["product_name"] == "Cold brew"
+    assert added.json()["items"][0]["unit_price"] == "42000.00"
+    assert added.json()["total_amount"] == "84000.00"
+    retry = client.post(
+        f"/orders/{order_id}/items",
+        headers=item_headers,
+        json={"product_id": product["id"], "topping_ids": [], "quantity": 2},
+    )
+    assert retry.status_code == 201
+    assert retry.json()["items"][0]["quantity"] == 2
+    reused = client.post(
+        f"/orders/{order_id}/items",
+        headers=item_headers,
+        json={"product_id": product["id"], "topping_ids": [], "quantity": 1},
+    )
+    assert reused.status_code == 409
+    assert reused.json()["detail"]["code"] == "idempotency_key_reused"
+    persisted = client.get(
+        f"/tables/{table['id']}/active-session", headers=staff
+    ).json()
+    assert persisted["orders"][0]["items"][0]["line_total"] == "84000.00"

@@ -237,6 +237,14 @@ def test_category_reassignment_preserves_products_and_options(
             "base_price": "32000.00",
         },
     ).json()
+    accentless_search = client.get(
+        "/products",
+        headers=manager,
+        params={"search": "CAFE MUOI", "page_size": 1},
+    )
+    assert accentless_search.status_code == 200
+    assert accentless_search.json()["total"] == 1
+    assert accentless_search.json()["items"][0]["id"] == product["id"]
     variant = client.post(
         f"/products/{product['id']}/variants",
         headers=manager,

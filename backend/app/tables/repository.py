@@ -1,11 +1,12 @@
 """Queries for tables, sessions, and their order history."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, contains_eager, selectinload
+from sqlalchemy.orm import Session, aliased, contains_eager, selectinload
 
 from app.db.models import (
     CafeTable,
     Order,
+    OrderEvent,
     OrderItem,
     Payment,
     Product,
@@ -78,6 +79,36 @@ class TableRepository:
             .options(contains_eager(ProductVariant.product))
             .with_for_update(of=(ProductVariant, Product))
         )
+
+    def default_variant(self, product_id: int) -> ProductVariant | None:
+        other_variant = aliased(ProductVariant)
+        return self.db.scalar(
+            select(ProductVariant)
+            .join(ProductVariant.product)
+            .where(
+                ProductVariant.product_id == product_id,
+                ProductVariant.sku == f"AUTO-{product_id}",
+                ~select(other_variant.id)
+                .where(
+                    other_variant.product_id == product_id,
+                    other_variant.id != ProductVariant.id,
+                    other_variant.is_active.is_(True),
+                )
+                .exists(),
+            )
+            .options(contains_eager(ProductVariant.product))
+            .with_for_update(of=(ProductVariant, Product))
+        )
+
+    def item_request_fingerprint(self, order_id: int, key: str) -> str | None:
+        note = self.db.scalar(
+            select(OrderEvent.note).where(
+                OrderEvent.order_id == order_id,
+                OrderEvent.event_type == "item_added",
+                OrderEvent.note.startswith(f"{key}:", autoescape=True),
+            )
+        )
+        return note.rsplit(":", 1)[-1] if note else None
 
     def toppings(self, product_id: int, topping_ids: list[int]) -> list[ProductTopping]:
         if not topping_ids:
